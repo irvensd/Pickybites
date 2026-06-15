@@ -1,0 +1,49 @@
+import { Pressable, Text, ActivityIndicator, type PressableProps } from "react-native";
+import { cn } from "@/lib/utils";
+import { hapticLight } from "@/lib/haptics";
+
+interface ButtonProps extends PressableProps {
+  label: string;
+  variant?: "primary" | "secondary" | "ghost" | "danger" | "demo";
+  loading?: boolean;
+  className?: string;
+  haptic?: boolean;
+}
+
+export function Button({ label, variant = "primary", loading, className, disabled, haptic = true, onPress, ...props }: ButtonProps) {
+  const base = "rounded-2xl py-4 px-6 items-center justify-center min-h-[52px]";
+  const variants = {
+    primary: "bg-savr-600 active:bg-savr-700",
+    secondary: "bg-white dark:bg-savr-800 border border-savr-200 dark:border-savr-700 active:bg-savr-50 dark:active:bg-savr-700",
+    ghost: "bg-transparent active:bg-savr-100 dark:active:bg-savr-800",
+    danger: "bg-red-500 active:bg-red-600",
+    demo: "bg-savr-900 dark:bg-savr-600 active:opacity-90",
+  };
+  const textVariants = {
+    primary: "text-white font-semibold text-base",
+    secondary: "text-savr-900 dark:text-savr-100 font-semibold text-base",
+    ghost: "text-savr-700 dark:text-savr-300 font-semibold text-base",
+    danger: "text-white font-semibold text-base",
+    demo: "text-white font-semibold text-base",
+  };
+
+  const handlePress = (e: Parameters<NonNullable<PressableProps["onPress"]>>[0]) => {
+    if (haptic) hapticLight();
+    onPress?.(e);
+  };
+
+  return (
+    <Pressable
+      className={cn(base, variants[variant], (disabled || loading) && "opacity-50", className)}
+      disabled={disabled || loading}
+      onPress={handlePress}
+      {...props}
+    >
+      {loading ? (
+        <ActivityIndicator color={variant === "primary" || variant === "danger" || variant === "demo" ? "#fff" : "#A85D3F"} />
+      ) : (
+        <Text className={textVariants[variant]}>{label}</Text>
+      )}
+    </Pressable>
+  );
+}
