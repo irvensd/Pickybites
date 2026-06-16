@@ -1,27 +1,34 @@
 {
   "expo": {
-    "name": "Savr",
-    "slug": "savr",
+    "name": "ForkLoop",
+    "slug": "forkloop",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
-    "scheme": "savr",
+    "icon": "./assets/images/logo.png",
+    "scheme": "forkloop",
     "userInterfaceStyle": "automatic",
     "splash": {
-      "image": "./assets/images/splash-icon.png",
+      "image": "./assets/images/logo.png",
       "resizeMode": "contain",
       "backgroundColor": "#FAFAF8"
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.savr.app"
+      "bundleIdentifier": "com.forkloop.app"
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#A85D3F",
-        "foregroundImage": "./assets/images/android-icon-foreground.png"
+        "foregroundImage": "./assets/images/logo.png"
       },
-      "package": "com.savr.app",
+      "package": "com.forkloop.app",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "data": [{ "scheme": "forkloop" }],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ],
       "permissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.ACCESS_COARSE_LOCATION",
@@ -33,18 +40,25 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Savr needs access to your photos to attach food images to reviews."
+          "photosPermission": "ForkLoop needs access to your photos to attach food images to reviews."
         }
       ],
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Savr uses your location to tag restaurants in your city."
+          "locationWhenInUsePermission": "ForkLoop uses your location to find restaurants near you."
         }
       ],
       "expo-asset",
       "expo-font",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/logo.png",
+          "color": "#A85D3F"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

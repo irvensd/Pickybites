@@ -7,7 +7,9 @@ export function Tag({ label, active, onPress, size = "md" }: { label: string; ac
       className={cn(
         "font-medium rounded-full",
         size === "sm" ? "text-xs px-2.5 py-1" : "text-sm px-3 py-1.5",
-        active ? "bg-savr-600 text-white" : "bg-savr-100 dark:bg-savr-700 text-savr-700 dark:text-savr-200"
+        active
+          ? "bg-savr-600 text-white"
+          : "bg-savr-100 text-savr-700 dark:bg-savr-925 dark:text-savr-200"
       )}
     >
       {label}

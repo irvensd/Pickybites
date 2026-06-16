@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { ui } from "@/constants/ui";
 
 export default function AddScreen() {
   return (
@@ -16,20 +17,22 @@ export default function AddScreen() {
             <Ionicons name="create" size={28} color="#fff" />
           </View>
           <View className="flex-1">
-            <Text className="font-semibold text-lg text-savr-900">Restaurant Review</Text>
-            <Text className="text-sm text-savr-500">Rate a spot, add dishes, photos, and tags</Text>
+            <Text className={`font-semibold text-lg ${ui.text.primary}`}>Restaurant Review</Text>
+            <Text className={`text-sm ${ui.text.muted}`}>Rate a spot, add dishes, photos, and tags</Text>
           </View>
         </Card>
       </Pressable>
-      <Card className="flex-row items-center gap-4 opacity-50">
-        <View className="w-14 h-14 rounded-2xl bg-savr-200 items-center justify-center">
-          <Ionicons name="fast-food" size={28} color="#A85D3F" />
-        </View>
-        <View className="flex-1">
-          <Text className="font-semibold text-lg text-savr-900">Quick Dish Log</Text>
-          <Text className="text-sm text-savr-500">Add a dish to an existing review</Text>
-        </View>
-      </Card>
+      <Pressable onPress={() => router.push("/add-dish")}>
+        <Card className="flex-row items-center gap-4 mb-4">
+          <View className="w-14 h-14 rounded-2xl bg-savr-200 dark:bg-savr-700 items-center justify-center">
+            <Ionicons name="fast-food" size={28} color="#A85D3F" />
+          </View>
+          <View className="flex-1">
+            <Text className="font-semibold text-lg text-savr-900 dark:text-savr-100">Quick Dish Log</Text>
+            <Text className={`text-sm ${ui.text.muted}`}>Add a dish to an existing review</Text>
+          </View>
+        </Card>
+      </Pressable>
       <View className="mt-8">
         <Button label="Write a Review" onPress={() => router.push("/add-review")} />
       </View>

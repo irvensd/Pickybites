@@ -6,9 +6,12 @@ import { useAppStore } from "@/store/useAppStore";
 import { calculateTasteDNA } from "@/lib/taste-dna";
 import { Avatar } from "@/components/ui/Avatar";
 import { Card } from "@/components/ui/Card";
+import { useThemeStore } from "@/store/useThemeStore";
+import { iconColors, ui } from "@/constants/ui";
 
 const menu = [
   { href: "/taste-dna" as const, icon: "color-wand" as const, label: "Taste DNA", desc: "Your flavor profile" },
+  { href: "/bookmarks" as const, icon: "bookmark" as const, label: "Want to Try", desc: "Saved spots to visit" },
   { href: "/lists" as const, icon: "list" as const, label: "My Lists", desc: "Curated restaurant lists" },
   { href: "/friends" as const, icon: "people" as const, label: "Friends", desc: "Follow & taste match" },
   { href: "/journal" as const, icon: "book" as const, label: "Food Journal", desc: "Timeline of visits" },
@@ -17,6 +20,7 @@ const menu = [
 ];
 
 export default function ProfileScreen() {
+  const isDark = useThemeStore((s) => s.resolved) === "dark";
   const { currentUserId, users, reviews, dishes, restaurants } = useAppStore();
   const user = users.find((u) => u.id === currentUserId);
   const userReviews = reviews.filter((r) => r.userId === currentUserId);
@@ -24,31 +28,40 @@ export default function ProfileScreen() {
 
   if (!user) return null;
   return (
-    <SafeAreaView className="flex-1 bg-savr-50 dark:bg-savr-950" edges={["top"]}>
+    <SafeAreaView className={`flex-1 ${ui.screen}`} edges={["top"]}>
       <ScrollView contentContainerClassName="px-4 pb-28 gap-4">
         <View className="items-center pt-4">
           <Avatar name={user.displayName} src={user.avatarUrl} size="xl" />
-          <Text className="text-2xl font-bold text-savr-900 mt-3">{user.displayName}</Text>
-          <Text className="text-sm text-savr-500">@{user.username}</Text>
-          {user.bio ? <Text className="text-sm text-savr-600 mt-2 text-center">{user.bio}</Text> : null}
-          <Text className="text-xs text-savr-400 mt-1">{user.city}</Text>
+          <Text className={`text-2xl font-bold mt-3 ${ui.text.primary}`}>{user.displayName}</Text>
+          <Text className={`text-sm ${ui.text.muted}`}>@{user.username}</Text>
+          {user.bio ? <Text className={`text-sm mt-2 text-center ${ui.text.secondary}`}>{user.bio}</Text> : null}
+          <Text className={`text-xs mt-1 ${ui.text.faint}`}>{user.city}</Text>
         </View>
         <View className="flex-row gap-3">
-          <Card className="flex-1 items-center py-3"><Text className="text-2xl font-bold text-savr-900">{userReviews.length}</Text><Text className="text-xs text-savr-500">Reviews</Text></Card>
-          <Card className="flex-1 items-center py-3"><Text className="text-2xl font-bold text-savr-900">{dna?.averageRating.toFixed(1) ?? "—"}</Text><Text className="text-xs text-savr-500">Avg Rating</Text></Card>
-          <Card className="flex-1 items-center py-3"><Text className="text-2xl font-bold text-savr-900">{dna?.favoriteCuisines.length ?? 0}</Text><Text className="text-xs text-savr-500">Cuisines</Text></Card>
+          <Card className="flex-1 items-center py-3">
+            <Text className={`text-2xl font-bold ${ui.text.primary}`}>{userReviews.length}</Text>
+            <Text className={`text-xs ${ui.text.muted}`}>Reviews</Text>
+          </Card>
+          <Card className="flex-1 items-center py-3">
+            <Text className={`text-2xl font-bold ${ui.text.primary}`}>{dna?.averageRating.toFixed(1) ?? "—"}</Text>
+            <Text className={`text-xs ${ui.text.muted}`}>Avg Rating</Text>
+          </Card>
+          <Card className="flex-1 items-center py-3">
+            <Text className={`text-2xl font-bold ${ui.text.primary}`}>{dna?.favoriteCuisines.length ?? 0}</Text>
+            <Text className={`text-xs ${ui.text.muted}`}>Cuisines</Text>
+          </Card>
         </View>
         {menu.map((m) => (
           <Pressable key={m.href} onPress={() => router.push(m.href)}>
             <Card className="flex-row items-center gap-4">
-              <View className="w-10 h-10 rounded-xl bg-savr-100 items-center justify-center">
-                <Ionicons name={m.icon} size={20} color="#A85D3F" />
+              <View className={`w-10 h-10 rounded-xl items-center justify-center ${ui.surface.muted}`}>
+                <Ionicons name={m.icon} size={20} color={isDark ? iconColors.brandDark : iconColors.brand} />
               </View>
               <View className="flex-1">
-                <Text className="font-semibold text-savr-900">{m.label}</Text>
-                <Text className="text-xs text-savr-500">{m.desc}</Text>
+                <Text className={`font-semibold ${ui.text.primary}`}>{m.label}</Text>
+                <Text className={`text-xs ${ui.text.muted}`}>{m.desc}</Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color="#D4C4B5" />
+              <Ionicons name="chevron-forward" size={20} color={isDark ? iconColors.mutedDark : iconColors.muted} />
             </Card>
           </Pressable>
         ))}

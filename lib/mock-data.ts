@@ -5,14 +5,15 @@ import type {
 import { cuisineImage, FOOD_IMAGES } from "./images";
 
 export const DEMO_EMAIL = "alex@example.com";
+export const DEMO_PASSWORD = "Demo1234!";
 
 export const MOCK_USERS: User[] = [
-  { id: "user-1", email: "alex@example.com", username: "alextastes", displayName: "Alex Rivera", avatarUrl: null, city: "Los Angeles", bio: "Always hunting for hidden gems. Taco enthusiast.", createdAt: "2024-01-15T10:00:00Z" },
-  { id: "user-2", email: "jordan@example.com", username: "jordanbites", displayName: "Jordan Kim", avatarUrl: null, city: "New York", bio: "Fine dining by night, pizza by day.", createdAt: "2024-02-20T10:00:00Z" },
-  { id: "user-3", email: "sam@example.com", username: "samspoon", displayName: "Sam Patel", avatarUrl: null, city: "Chicago", bio: "Spice tolerance: legendary. Butter chicken evangelist.", createdAt: "2024-03-10T10:00:00Z" },
-  { id: "user-4", email: "maya@example.com", username: "mayaeats", displayName: "Maya Chen", avatarUrl: null, city: "Miami", bio: "Caribbean food obsessed. Jerk chicken critic.", createdAt: "2024-04-05T10:00:00Z" },
-  { id: "user-5", email: "riley@example.com", username: "rileyramen", displayName: "Riley Okafor", avatarUrl: null, city: "San Francisco", bio: "Ramen rankings are my personality.", createdAt: "2024-05-12T10:00:00Z" },
-  { id: "user-6", email: "taylor@example.com", username: "taylorthai", displayName: "Taylor Brooks", avatarUrl: null, city: "Austin", bio: "Hot take: pad thai is underrated.", createdAt: "2024-06-18T10:00:00Z" },
+  { id: "user-1", email: "alex@example.com", username: "alextastes", displayName: "Alex Rivera", avatarUrl: null, city: "Los Angeles", bio: "Always hunting for hidden gems. Taco enthusiast.", favoriteCuisines: ["Mexican", "Japanese", "Italian"], hasCompletedTasteQuiz: true, createdAt: "2024-01-15T10:00:00Z" },
+  { id: "user-2", email: "jordan@example.com", username: "jordanbites", displayName: "Jordan Kim", avatarUrl: null, city: "New York", bio: "Fine dining by night, pizza by day.", favoriteCuisines: ["Italian", "French"], hasCompletedTasteQuiz: true, createdAt: "2024-02-20T10:00:00Z" },
+  { id: "user-3", email: "sam@example.com", username: "samspoon", displayName: "Sam Patel", avatarUrl: null, city: "Chicago", bio: "Spice tolerance: legendary. Butter chicken evangelist.", favoriteCuisines: ["Indian", "Thai"], hasCompletedTasteQuiz: true, createdAt: "2024-03-10T10:00:00Z" },
+  { id: "user-4", email: "maya@example.com", username: "mayaeats", displayName: "Maya Chen", avatarUrl: null, city: "Miami", bio: "Caribbean food obsessed. Jerk chicken critic.", favoriteCuisines: ["Caribbean", "Spanish"], hasCompletedTasteQuiz: true, createdAt: "2024-04-05T10:00:00Z" },
+  { id: "user-5", email: "riley@example.com", username: "rileyramen", displayName: "Riley Okafor", avatarUrl: null, city: "San Francisco", bio: "Ramen rankings are my personality.", favoriteCuisines: ["Japanese", "Korean"], hasCompletedTasteQuiz: true, createdAt: "2024-05-12T10:00:00Z" },
+  { id: "user-6", email: "taylor@example.com", username: "taylorthai", displayName: "Taylor Brooks", avatarUrl: null, city: "Austin", bio: "Hot take: pad thai is underrated.", favoriteCuisines: ["Thai", "Vietnamese"], hasCompletedTasteQuiz: true, createdAt: "2024-06-18T10:00:00Z" },
 ];
 
 export const MOCK_RESTAURANTS: Restaurant[] = [

@@ -46,15 +46,84 @@ export function calculateTasteMatch(a: string, b: string, reviews: Review[], res
   const ra = reviews.filter((r) => r.userId === a);
   const rb = reviews.filter((r) => r.userId === b);
   if (!ra.length || !rb.length) return 0;
+
+  const ratingsA = new Map(ra.map((r) => [r.restaurantId, r.rating]));
+  const sharedRestaurantReviews = rb.filter((r) => ratingsA.has(r.restaurantId));
+
+  if (sharedRestaurantReviews.length > 0) {
+    const avgDiff =
+      sharedRestaurantReviews.reduce((s, r) => s + Math.abs(ratingsA.get(r.restaurantId)! - r.rating), 0) /
+      sharedRestaurantReviews.length;
+    const base = Math.max(0, 100 - avgDiff * 12);
+    const overlapBonus = Math.min(15, sharedRestaurantReviews.length * 4);
+    return Math.min(99, Math.round(base + overlapBonus));
+  }
+
   const rMap = new Map(restaurants.map((r) => [r.id, r]));
   const cuisinesA = new Map<Cuisine, number[]>();
   const cuisinesB = new Map<Cuisine, number[]>();
-  ra.forEach((r) => { const c = rMap.get(r.restaurantId)?.cuisine; if (c) { const arr = cuisinesA.get(c) ?? []; arr.push(r.rating); cuisinesA.set(c, arr); } });
-  rb.forEach((r) => { const c = rMap.get(r.restaurantId)?.cuisine; if (c) { const arr = cuisinesB.get(c) ?? []; arr.push(r.rating); cuisinesB.set(c, arr); } });
+  ra.forEach((r) => {
+    const c = rMap.get(r.restaurantId)?.cuisine;
+    if (c) {
+      const arr = cuisinesA.get(c) ?? [];
+      arr.push(r.rating);
+      cuisinesA.set(c, arr);
+    }
+  });
+  rb.forEach((r) => {
+    const c = rMap.get(r.restaurantId)?.cuisine;
+    if (c) {
+      const arr = cuisinesB.get(c) ?? [];
+      arr.push(r.rating);
+      cuisinesB.set(c, arr);
+    }
+  });
   const shared = Array.from(cuisinesA.keys()).filter((c) => cuisinesB.has(c));
-  if (!shared.length) return Math.max(0, Math.round(100 - Math.abs(ra.reduce((s, r) => s + r.rating, 0) / ra.length - rb.reduce((s, r) => s + r.rating, 0) / rb.length) * 10));
-  const diff = shared.reduce((s, c) => s + Math.abs(cuisinesA.get(c)!.reduce((a, x) => a + x, 0) / cuisinesA.get(c)!.length - cuisinesB.get(c)!.reduce((a, x) => a + x, 0) / cuisinesB.get(c)!.length), 0) / shared.length;
+  if (!shared.length) {
+    return Math.max(
+      0,
+      Math.round(
+        100 -
+          Math.abs(
+            ra.reduce((s, r) => s + r.rating, 0) / ra.length - rb.reduce((s, r) => s + r.rating, 0) / rb.length
+          ) *
+            10
+      )
+    );
+  }
+  const diff =
+    shared.reduce(
+      (s, c) =>
+        s +
+        Math.abs(
+          cuisinesA.get(c)!.reduce((x, v) => x + v, 0) / cuisinesA.get(c)!.length -
+            cuisinesB.get(c)!.reduce((x, v) => x + v, 0) / cuisinesB.get(c)!.length
+        ),
+      0
+    ) / shared.length;
   return Math.round(Math.max(0, 100 - diff * 8) * 0.7 + (shared.length / Math.max(cuisinesA.size, cuisinesB.size)) * 30);
+}
+
+export function getTasteMatchDetails(a: string, b: string, reviews: Review[], restaurants: Restaurant[]) {
+  const ra = reviews.filter((r) => r.userId === a);
+  const rb = reviews.filter((r) => r.userId === b);
+  const ratingsA = new Map(ra.map((r) => [r.restaurantId, r.rating]));
+  const sharedRestaurants = rb.filter((r) => ratingsA.has(r.restaurantId)).length;
+
+  const rMap = new Map(restaurants.map((r) => [r.id, r]));
+  const cuisinesA = new Set(ra.map((r) => rMap.get(r.restaurantId)?.cuisine).filter(Boolean));
+  const cuisinesB = new Set(rb.map((r) => rMap.get(r.restaurantId)?.cuisine).filter(Boolean));
+  const sharedCuisines = [...cuisinesA].filter((c) => cuisinesB.has(c)).length;
+
+  const percent = calculateTasteMatch(a, b, reviews, restaurants);
+  const detail =
+    sharedRestaurants > 0
+      ? `Based on ${sharedRestaurants} shared spot${sharedRestaurants === 1 ? "" : "s"}`
+      : sharedCuisines > 0
+        ? `Based on ${sharedCuisines} shared cuisine${sharedCuisines === 1 ? "" : "s"}`
+        : undefined;
+
+  return { percent, sharedRestaurants, sharedCuisines, detail };
 }
 
 export function calculateFoodWrapped(userId: string, year: number, reviews: Review[], dishes: Dish[], restaurants: Restaurant[]) {
@@ -69,6 +138,7 @@ export function calculateFoodWrapped(userId: string, year: number, reviews: Revi
   const topD = yrDishes.map((d) => ({ dish: d, restaurant: rMap.get(d.restaurantId)! })).filter((x) => x.restaurant).sort((a, b) => b.dish.rating - a.dish.rating)[0] ?? null;
   return {
     year, totalRestaurants: yr.length, totalDishes: yrDishes.length,
+    priorYearRestaurants: reviews.filter((r) => r.userId === userId && new Date(r.visitDate).getFullYear() === year - 1).length,
     highestRatedRestaurant: topR,
     highestRatedDish: topD,
     favoriteCuisine: Array.from(cuisines.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null,

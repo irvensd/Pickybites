@@ -48,17 +48,50 @@ export interface User {
   avatarUrl: string | null;
   city: string;
   bio: string;
+  favoriteCuisines: Cuisine[];
+  hasCompletedTasteQuiz: boolean;
+  createdAt: string;
+}
+
+export type NotificationType = "like" | "comment" | "follow";
+
+export interface AppNotification {
+  id: string;
+  userId: string;
+  actorId: string | null;
+  type: NotificationType;
+  reviewId: string | null;
+  message: string;
+  read: boolean;
+  createdAt: string;
+}
+
+export interface Bookmark {
+  id: string;
+  userId: string;
+  restaurantId: string | null;
+  googlePlaceId: string | null;
+  placeName: string;
+  placeAddress: string;
+  placeCity: string;
+  placeCuisine: Cuisine | null;
+  placeImageUrl: string | null;
+  latitude: number | null;
+  longitude: number | null;
   createdAt: string;
 }
 
 export interface Restaurant {
   id: string;
+  googlePlaceId?: string | null;
   name: string;
   address: string;
   city: string;
   cuisine: Cuisine;
   priceLevel: PriceLevel;
   imageUrl: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   createdAt: string;
 }
 
@@ -111,6 +144,13 @@ export interface Follow {
   id: string;
   followerId: string;
   followingId: string;
+  createdAt: string;
+}
+
+export interface ListCollaborator {
+  id: string;
+  listId: string;
+  userId: string;
   createdAt: string;
 }
 

@@ -4,18 +4,22 @@ import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import type { Recommendation } from "@/lib/types";
 import { Card } from "@/components/ui/Card";
+import { cn } from "@/lib/utils";
 import { hapticLight } from "@/lib/haptics";
+import { useThemedColors } from "@/lib/useThemedColors";
+import { ui } from "@/constants/ui";
 
 const CARD_WIDTH = Dimensions.get("window").width * 0.72;
 
 export function ForYouCarousel({ recommendations }: { recommendations: Recommendation[] }) {
+  const colors = useThemedColors();
   if (!recommendations.length) return null;
 
   return (
     <View className="gap-3">
       <View className="flex-row items-center gap-2 px-4">
-        <Ionicons name="sparkles" size={18} color="#A85D3F" />
-        <Text className="text-lg font-semibold text-savr-900 dark:text-savr-100">For You</Text>
+        <Ionicons name="sparkles" size={18} color={colors.brand} />
+        <Text className={`text-lg font-semibold ${ui.text.primary}`}>Because you loved…</Text>
       </View>
       <ScrollView
         horizontal
@@ -42,8 +46,8 @@ export function ForYouCarousel({ recommendations }: { recommendations: Recommend
                   transition={200}
                 />
               ) : (
-                <View className="h-[120px] bg-savr-100 dark:bg-savr-800 items-center justify-center">
-                  <Ionicons name="restaurant" size={32} color="#A85D3F" />
+                <View className={cn("h-[120px] items-center justify-center", ui.surface.muted)}>
+                  <Ionicons name="restaurant" size={32} color={colors.brand} />
                 </View>
               )}
               <View className="p-4 gap-2">
@@ -51,8 +55,8 @@ export function ForYouCarousel({ recommendations }: { recommendations: Recommend
                   <Text className="font-semibold text-base text-savr-900 dark:text-savr-100 flex-1" numberOfLines={1}>
                     {rec.restaurant.name}
                   </Text>
-                  <View className="bg-savr-100 dark:bg-savr-800 px-2.5 py-1 rounded-full">
-                    <Text className="text-xs font-bold text-savr-700 dark:text-savr-300">{rec.confidence}%</Text>
+                  <View className={cn("px-2.5 py-1 rounded-full", ui.surface.muted)}>
+                    <Text className={`text-xs font-bold ${ui.text.secondary}`}>{rec.confidence}%</Text>
                   </View>
                 </View>
                 <Text className="text-xs text-savr-500 dark:text-savr-400">

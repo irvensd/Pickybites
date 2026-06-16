@@ -3,8 +3,10 @@ import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { Button } from "@/components/ui/Button";
+import { Logo } from "@/components/ui/Logo";
 import { useAppStore } from "@/store/useAppStore";
 import { hapticSuccess } from "@/lib/haptics";
+import { routeAfterAuth } from "@/lib/navigation";
 
 const slides = [
   { icon: "star" as const, title: "Rate every bite", desc: "Score restaurants and dishes from 1.0 to 10.0" },
@@ -16,10 +18,13 @@ export default function Onboarding() {
   const completeOnboarding = useAppStore((s) => s.completeOnboarding);
   const demoLogin = useAppStore((s) => s.demoLogin);
 
-  const handleDemo = () => {
-    if (demoLogin()) {
+  const handleDemo = async () => {
+    const result = await demoLogin();
+    if (result.ok) {
       hapticSuccess();
-      router.replace("/(tabs)");
+      const uid = useAppStore.getState().currentUserId;
+      const user = useAppStore.getState().users.find((u) => u.id === uid);
+      router.replace(routeAfterAuth(user));
     }
   };
 
@@ -27,11 +32,7 @@ export default function Onboarding() {
     <SafeAreaView className="flex-1 bg-savr-50 dark:bg-savr-950">
       <View className="flex-1 px-6 justify-center">
         <View className="items-center mb-10">
-          <View className="w-16 h-16 rounded-2xl bg-savr-600 items-center justify-center mb-4">
-            <Text className="text-white text-2xl font-bold">S</Text>
-          </View>
-          <Text className="text-4xl font-bold text-savr-900 dark:text-savr-100 text-center">Savr</Text>
-          <Text className="text-lg text-savr-600 dark:text-savr-400 text-center mt-2">Your taste, mapped.</Text>
+          <Logo size="xl" showName showTagline />
         </View>
         <View className="gap-4">
           {slides.map((s) => (

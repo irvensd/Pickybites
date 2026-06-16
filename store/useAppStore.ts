@@ -1,15 +1,29 @@
 import { create } from "zustand";
 import {
-  CURRENT_USER_ID, DEMO_EMAIL, MOCK_COMMENTS, MOCK_DISHES, MOCK_FOLLOWS,
+  DEMO_EMAIL, DEMO_PASSWORD,
+  MOCK_COMMENTS, MOCK_DISHES, MOCK_FOLLOWS,
   MOCK_LIKES, MOCK_LIST_ITEMS, MOCK_LISTS, MOCK_RESTAURANTS,
   MOCK_REVIEW_PHOTOS, MOCK_REVIEWS, MOCK_USERS,
 } from "@/lib/mock-data";
-import type { Comment, Dish, Follow, Like, List, ListItem, Restaurant, Review, ReviewPhoto, ReviewTag, User } from "@/lib/types";
+import { isSupabaseConfigured } from "@/lib/supabase/client";
+import * as supabaseApi from "@/lib/supabase/api";
+import { uploadAvatar } from "@/lib/supabase/storage";
+import type { PlaceResult } from "@/lib/places/types";
+import * as tier1 from "@/lib/supabase/tier1";
+import { registerForPushNotifications, showLocalNotification } from "@/lib/push";
+import * as tier2 from "@/lib/supabase/tier2";
+import type { Comment, Cuisine, Dish, Follow, Like, List, ListItem, ListCollaborator, Restaurant, Review, ReviewPhoto, ReviewTag, User, AppNotification, Bookmark } from "@/lib/types";
+import { APP_NAME } from "@/constants/branding";
 import { generateId } from "@/lib/utils";
+import { loadHasSeenOnboarding, saveHasSeenOnboarding } from "@/lib/prefs";
+
+export type AuthResult = { ok: true } | { ok: false; error: string };
 
 interface AppState {
   hasSeenOnboarding: boolean;
   isAuthenticated: boolean;
+  isInitializing: boolean;
+  useSupabase: boolean;
   currentUserId: string | null;
   users: User[];
   restaurants: Restaurant[];
@@ -20,129 +34,632 @@ interface AppState {
   follows: Follow[];
   lists: List[];
   listItems: ListItem[];
+  listCollaborators: ListCollaborator[];
   reviewPhotos: ReviewPhoto[];
+  notifications: AppNotification[];
+  bookmarks: Bookmark[];
   isRefreshing: boolean;
+  isDataLoaded: boolean;
   feedVersion: number;
+  initialize: () => Promise<void>;
   completeOnboarding: () => void;
-  login: (email: string, password: string) => boolean;
-  demoLogin: () => boolean;
-  signup: (data: { email: string; password: string; username: string; displayName: string; city: string }) => boolean;
-  logout: () => void;
+  login: (email: string, password: string) => Promise<AuthResult>;
+  demoLogin: () => Promise<AuthResult>;
+  signup: (data: { email: string; password: string; username: string; displayName: string; city: string }) => Promise<AuthResult>;
+  logout: () => Promise<void>;
   refreshFeed: () => Promise<void>;
-  updateProfile: (updates: Partial<User>) => void;
+  loadData: () => Promise<void>;
+  ensureRestaurantFromPlace: (place: PlaceResult) => Promise<Restaurant | { error: string }>;
+  updateProfile: (updates: Partial<User> & { avatarLocalUri?: string }) => Promise<AuthResult>;
   addReview: (data: {
-    restaurantName: string; address: string; city: string;
-    cuisine: Restaurant["cuisine"]; priceLevel: Restaurant["priceLevel"];
-    rating: number; text: string; visitDate: string; tags: ReviewTag[];
+    restaurantId?: string;
+    place?: PlaceResult;
+    restaurantName?: string;
+    address?: string;
+    city?: string;
+    cuisine?: Restaurant["cuisine"];
+    priceLevel?: Restaurant["priceLevel"];
+    rating: number;
+    text: string;
+    visitDate: string;
+    tags: ReviewTag[];
+    photoUris?: string[];
     dishes: Omit<Dish, "id" | "reviewId" | "restaurantId" | "createdAt">[];
-  }) => { reviewId: string; restaurantId: string };
-  toggleLike: (reviewId: string) => void;
-  addComment: (reviewId: string, text: string) => void;
-  toggleFollow: (userId: string) => void;
+  }) => Promise<{ reviewId: string; restaurantId: string } | { error: string }>;
+  updateReview: (
+    reviewId: string,
+    data: { rating: number; text: string; visitDate: string; tags: ReviewTag[] },
+  ) => Promise<{ ok: true } | { error: string }>;
+  deleteReview: (reviewId: string) => Promise<{ ok: true } | { error: string }>;
+  toggleLike: (reviewId: string) => Promise<void>;
+  addComment: (reviewId: string, text: string) => Promise<void>;
+  toggleFollow: (userId: string) => Promise<void>;
   getUser: (id: string) => User | undefined;
   getRestaurant: (id: string) => Restaurant | undefined;
   getReview: (id: string) => Review | undefined;
   getDish: (id: string) => Dish | undefined;
   getReviewPhoto: (reviewId: string) => ReviewPhoto | undefined;
+  getReviewPhotos: (reviewId: string) => ReviewPhoto[];
   isFollowing: (id: string) => boolean;
   isLiked: (reviewId: string) => boolean;
   likeCount: (reviewId: string) => number;
   getComments: (reviewId: string) => Comment[];
+  unreadNotificationCount: () => number;
+  requestPasswordReset: (email: string) => Promise<AuthResult>;
+  updatePassword: (password: string) => Promise<AuthResult>;
+  completeTasteQuiz: (cuisines: Cuisine[]) => Promise<AuthResult>;
+  registerPush: () => Promise<void>;
+  markNotificationsRead: () => Promise<void>;
+  createList: (name: string, description: string) => Promise<{ listId: string } | { error: string }>;
+  deleteList: (listId: string) => Promise<void>;
+  addListItem: (listId: string, restaurantId: string, note?: string) => Promise<AuthResult>;
+  removeListItem: (itemId: string) => Promise<void>;
+  getMyLists: () => List[];
+  canEditList: (listId: string) => boolean;
+  getListCollaborators: (listId: string) => ListCollaborator[];
+  inviteListCollaborator: (listId: string, userId: string) => Promise<AuthResult>;
+  removeListCollaborator: (collaboratorId: string) => Promise<void>;
+  addDish: (reviewId: string, dish: { name: string; rating: number; notes: string; isBestDish: boolean }) => Promise<{ dishId: string } | { error: string }>;
+  toggleBookmark: (place: PlaceResult) => Promise<AuthResult>;
+  toggleRestaurantBookmark: (restaurant: Restaurant) => Promise<AuthResult>;
+  isBookmarked: (googlePlaceId: string) => boolean;
+  isRestaurantBookmarked: (restaurant: Restaurant) => boolean;
+  removeBookmark: (bookmarkId: string) => Promise<void>;
+}
+
+function mockDataState() {
+  return {
+    users: MOCK_USERS,
+    restaurants: MOCK_RESTAURANTS,
+    reviews: MOCK_REVIEWS,
+    dishes: MOCK_DISHES,
+    likes: MOCK_LIKES,
+    comments: MOCK_COMMENTS,
+    follows: MOCK_FOLLOWS,
+    lists: MOCK_LISTS,
+    listItems: MOCK_LIST_ITEMS,
+    listCollaborators: [] as ListCollaborator[],
+    reviewPhotos: MOCK_REVIEW_PHOTOS,
+    notifications: [] as AppNotification[],
+    bookmarks: [] as Bookmark[],
+  };
+}
+
+function emptyDataState() {
+  return {
+    users: [] as User[],
+    restaurants: [] as Restaurant[],
+    reviews: [] as Review[],
+    dishes: [] as Dish[],
+    likes: [] as Like[],
+    comments: [] as Comment[],
+    follows: [] as Follow[],
+    lists: [] as List[],
+    listItems: [] as ListItem[],
+    listCollaborators: [] as ListCollaborator[],
+    reviewPhotos: [] as ReviewPhoto[],
+    notifications: [] as AppNotification[],
+    bookmarks: [] as Bookmark[],
+  };
+}
+
+let notificationUnsub: (() => void) | null = null;
+
+function setupNotificationListener(userId: string) {
+  notificationUnsub?.();
+  notificationUnsub = supabaseApi.subscribeToNotifications(userId, (notification) => {
+    showLocalNotification(APP_NAME, notification.message);
+    useAppStore.setState((s) => ({
+      notifications: [notification, ...s.notifications.filter((n) => n.id !== notification.id)],
+    }));
+  });
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
   hasSeenOnboarding: false,
   isAuthenticated: false,
+  isInitializing: true,
+  useSupabase: isSupabaseConfigured(),
   currentUserId: null,
-  users: MOCK_USERS,
-  restaurants: MOCK_RESTAURANTS,
-  reviews: MOCK_REVIEWS,
-  dishes: MOCK_DISHES,
-  likes: MOCK_LIKES,
-  comments: MOCK_COMMENTS,
-  follows: MOCK_FOLLOWS,
-  lists: MOCK_LISTS,
-  listItems: MOCK_LIST_ITEMS,
-  reviewPhotos: MOCK_REVIEW_PHOTOS,
+  ...emptyDataState(),
   isRefreshing: false,
+  isDataLoaded: false,
   feedVersion: 0,
 
-  completeOnboarding: () => set({ hasSeenOnboarding: true }),
+  unreadNotificationCount: () => get().notifications.filter((n) => !n.read).length,
 
-  login: (email) => {
-    // TODO: Supabase auth.signInWithPassword
-    const user = get().users.find((u) => u.email.toLowerCase() === email.toLowerCase().trim());
-    if (!user) return false;
-    set({ isAuthenticated: true, currentUserId: user.id });
-    return true;
+  initialize: async () => {
+    const useSupabase = isSupabaseConfigured();
+    set({ useSupabase, isInitializing: true, isDataLoaded: !useSupabase });
+
+    if (!useSupabase) {
+      set({ isInitializing: false, ...mockDataState() });
+      return;
+    }
+
+    try {
+      const seenOnboarding = await loadHasSeenOnboarding();
+      if (seenOnboarding) set({ hasSeenOnboarding: true });
+
+      const userId = await supabaseApi.getSessionUserId();
+      if (userId) {
+        set({ isAuthenticated: true, currentUserId: userId });
+        void supabaseApi.fetchAllData(userId)
+          .then((data) => {
+            set({ ...data, isDataLoaded: true });
+            setupNotificationListener(userId);
+            get().registerPush();
+          })
+          .catch((e) => console.error("Background data load failed:", e));
+      }
+    } catch (e) {
+      console.error("Init failed:", e);
+    } finally {
+      set({ isInitializing: false });
+    }
+
+    supabaseApi.subscribeToAuth(async (userId) => {
+      if (!userId) {
+        notificationUnsub?.();
+        notificationUnsub = null;
+        set({ isAuthenticated: false, currentUserId: null, isDataLoaded: false, ...emptyDataState() });
+        return;
+      }
+      if (get().currentUserId !== userId) {
+        set({ isAuthenticated: true, currentUserId: userId, isDataLoaded: false });
+        setupNotificationListener(userId);
+        await get().loadData();
+        set({ isDataLoaded: true });
+        get().registerPush();
+      }
+    });
   },
 
-  demoLogin: () => {
-    const user = get().users.find((u) => u.id === CURRENT_USER_ID);
-    if (!user) return false;
-    set({ hasSeenOnboarding: true, isAuthenticated: true, currentUserId: user.id });
-    return true;
+  completeOnboarding: () => {
+    saveHasSeenOnboarding();
+    set({ hasSeenOnboarding: true });
   },
 
-  signup: (data) => {
-    // TODO: Supabase auth.signUp + profile insert
-    if (get().users.some((u) => u.email === data.email || u.username === data.username)) return false;
-    const user: User = { id: generateId("user"), email: data.email, username: data.username, displayName: data.displayName, avatarUrl: null, city: data.city, bio: "", createdAt: new Date().toISOString() };
-    set((s) => ({ users: [...s.users, user], isAuthenticated: true, currentUserId: user.id }));
-    return true;
+  loadData: async () => {
+    if (!get().useSupabase) return;
+    const userId = get().currentUserId;
+    try {
+      const data = await supabaseApi.fetchAllData(userId);
+      set({ ...data, isDataLoaded: true });
+    } catch (e) {
+      console.error("Load data failed:", e);
+    }
   },
 
-  logout: () => {
-    // TODO: Supabase auth.signOut
-    set({ isAuthenticated: false, currentUserId: null });
+  ensureRestaurantFromPlace: async (place) => {
+    const existing = get().restaurants.find((r) => r.googlePlaceId === place.googlePlaceId);
+    if (existing) return existing;
+
+    if (get().useSupabase) {
+      try {
+        const restaurant = await supabaseApi.findOrCreateRestaurantFromPlace(place);
+        set((s) => ({
+          restaurants: s.restaurants.some((r) => r.id === restaurant.id)
+            ? s.restaurants
+            : [restaurant, ...s.restaurants],
+        }));
+        return restaurant;
+      } catch (e) {
+        return { error: e instanceof Error ? e.message : "Could not save restaurant" };
+      }
+    }
+
+    const restaurant: Restaurant = {
+      id: generateId("rest"),
+      googlePlaceId: place.googlePlaceId,
+      name: place.name,
+      address: place.address,
+      city: place.city,
+      cuisine: place.cuisine,
+      priceLevel: place.priceLevel,
+      imageUrl: place.imageUrl,
+      latitude: place.latitude,
+      longitude: place.longitude,
+      createdAt: new Date().toISOString(),
+    };
+    set((s) => ({ restaurants: [restaurant, ...s.restaurants] }));
+    return restaurant;
+  },
+
+  login: async (email, password) => {
+    if (!get().useSupabase) {
+      const user = get().users.find((u) => u.email.toLowerCase() === email.toLowerCase().trim());
+      if (!user) return { ok: false, error: "Invalid email. Try alex@example.com" };
+      set({ isAuthenticated: true, currentUserId: user.id });
+      return { ok: true };
+    }
+    try {
+      const userId = await supabaseApi.signIn(email, password);
+      const data = await supabaseApi.fetchAllData(userId);
+      set({ isAuthenticated: true, currentUserId: userId, ...data });
+      setupNotificationListener(userId);
+      get().registerPush();
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : "Login failed" };
+    }
+  },
+
+  demoLogin: async () => {
+    set({ hasSeenOnboarding: true });
+    if (!get().useSupabase) {
+      const user = MOCK_USERS.find((u) => u.email === DEMO_EMAIL);
+      if (!user) return { ok: false, error: "Demo user not found" };
+      set({ isAuthenticated: true, currentUserId: user.id, ...mockDataState() });
+      return { ok: true };
+    }
+    try {
+      let userId: string | null = null;
+      try {
+        userId = await supabaseApi.signIn(DEMO_EMAIL, DEMO_PASSWORD);
+      } catch {
+        userId = await supabaseApi.signUp({
+          email: DEMO_EMAIL,
+          password: DEMO_PASSWORD,
+          username: "alextastes",
+          displayName: "Alex Rivera",
+          city: "Los Angeles",
+        });
+        if (userId) userId = await supabaseApi.signIn(DEMO_EMAIL, DEMO_PASSWORD);
+      }
+      const data = await supabaseApi.fetchAllData(userId);
+      set({ isAuthenticated: true, currentUserId: userId, ...data });
+      if (userId) {
+        setupNotificationListener(userId);
+        get().registerPush();
+      }
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : "Demo login failed" };
+    }
+  },
+
+  signup: async (data) => {
+    if (!get().useSupabase) {
+      if (get().users.some((u) => u.email === data.email || u.username === data.username)) {
+        return { ok: false, error: "Email or username already taken." };
+      }
+      const user: User = {
+        id: generateId("user"), email: data.email, username: data.username,
+        displayName: data.displayName, avatarUrl: null, city: data.city, bio: "",
+        favoriteCuisines: [], hasCompletedTasteQuiz: false,
+        createdAt: new Date().toISOString(),
+      };
+      set((s) => ({ users: [...s.users, user], isAuthenticated: true, currentUserId: user.id }));
+      return { ok: true };
+    }
+    try {
+      const userId = await supabaseApi.signUp(data);
+      const allData = await supabaseApi.fetchAllData(userId);
+      set({ isAuthenticated: true, currentUserId: userId, ...allData });
+      if (userId) {
+        setupNotificationListener(userId);
+        get().registerPush();
+      }
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : "Signup failed" };
+    }
+  },
+
+  logout: async () => {
+    notificationUnsub?.();
+    notificationUnsub = null;
+    if (get().useSupabase) await supabaseApi.signOut();
+    set({ isAuthenticated: false, currentUserId: null, ...(get().useSupabase ? emptyDataState() : {}) });
   },
 
   refreshFeed: async () => {
     set({ isRefreshing: true });
-    await new Promise((r) => setTimeout(r, 900));
+    if (get().useSupabase) await get().loadData();
     set((s) => ({ isRefreshing: false, feedVersion: s.feedVersion + 1 }));
   },
 
-  updateProfile: (updates) => {
-    // TODO: Supabase users table update
-    set((s) => ({ users: s.users.map((u) => u.id === s.currentUserId ? { ...u, ...updates } : u) }));
+  updateProfile: async (updates) => {
+    const uid = get().currentUserId;
+    if (!uid) return { ok: false, error: "Not signed in" };
+
+    let avatarUrl = updates.avatarUrl;
+    if (updates.avatarLocalUri && get().useSupabase) {
+      const uploaded = await uploadAvatar(uid, updates.avatarLocalUri);
+      if (uploaded) avatarUrl = uploaded;
+    }
+
+    const { avatarLocalUri: _, ...profileUpdates } = updates;
+
+    if (get().useSupabase) {
+      try {
+        await supabaseApi.updateUserProfile(uid, { ...profileUpdates, avatarUrl });
+        set((s) => ({
+          users: s.users.map((u) =>
+            u.id === uid ? { ...u, ...profileUpdates, avatarUrl: avatarUrl ?? u.avatarUrl } : u,
+          ),
+        }));
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : "Update failed" };
+      }
+    }
+
+    set((s) => ({
+      users: s.users.map((u) => u.id === uid ? { ...u, ...profileUpdates, avatarUrl: avatarUrl ?? u.avatarUrl } : u),
+    }));
+    return { ok: true };
   },
 
-  addReview: (data) => {
-    // TODO: Supabase inserts for restaurant, review, dishes, photos
+  addReview: async (data) => {
+    const uid = get().currentUserId;
+    if (!uid) return { error: "Not signed in" };
+
+    if (get().useSupabase) {
+      try {
+        const result = await supabaseApi.createReview(uid, {
+          ...data,
+          photoUris: data.photoUris ?? [],
+        });
+        set((s) => ({
+          restaurants: s.restaurants.some((r) => r.id === result.restaurant.id)
+            ? s.restaurants.map((r) => (r.id === result.restaurant.id ? result.restaurant : r))
+            : [result.restaurant, ...s.restaurants],
+          reviews: [result.review, ...s.reviews],
+          dishes: [...result.dishes, ...s.dishes],
+          reviewPhotos: [...result.reviewPhotos, ...s.reviewPhotos],
+        }));
+        return { reviewId: result.reviewId, restaurantId: result.restaurantId };
+      } catch (e) {
+        return { error: e instanceof Error ? e.message : "Failed to publish review" };
+      }
+    }
+
     const restaurantId = generateId("rest");
     const reviewId = generateId("rev");
-    const uid = get().currentUserId!;
-    const restaurant: Restaurant = { id: restaurantId, name: data.restaurantName, address: data.address, city: data.city, cuisine: data.cuisine, priceLevel: data.priceLevel, imageUrl: null, createdAt: new Date().toISOString() };
-    const review: Review = { id: reviewId, userId: uid, restaurantId, rating: data.rating, text: data.text, visitDate: data.visitDate, tags: data.tags, createdAt: new Date().toISOString() };
-    const newDishes = data.dishes.map((d) => ({ ...d, id: generateId("dish"), reviewId, restaurantId, createdAt: new Date().toISOString() }));
-    set((s) => ({ restaurants: [...s.restaurants, restaurant], reviews: [...s.reviews, review], dishes: [...s.dishes, ...newDishes] }));
+    const restaurant: Restaurant = {
+      id: restaurantId,
+      name: data.restaurantName ?? data.place?.name ?? "Unknown",
+      address: data.address ?? data.place?.address ?? "",
+      city: data.city ?? data.place?.city ?? "",
+      cuisine: data.cuisine ?? data.place?.cuisine ?? "American",
+      priceLevel: data.priceLevel ?? data.place?.priceLevel ?? 2,
+      imageUrl: data.place?.imageUrl ?? null,
+      googlePlaceId: data.place?.googlePlaceId ?? null,
+      createdAt: new Date().toISOString(),
+    };
+    const review: Review = {
+      id: reviewId, userId: uid, restaurantId, rating: data.rating, text: data.text,
+      visitDate: data.visitDate, tags: data.tags, createdAt: new Date().toISOString(),
+    };
+    const newDishes = data.dishes.map((d) => ({
+      ...d, id: generateId("dish"), reviewId, restaurantId, createdAt: new Date().toISOString(),
+    }));
+    set((s) => ({
+      restaurants: [...s.restaurants, restaurant],
+      reviews: [...s.reviews, review],
+      dishes: [...s.dishes, ...newDishes],
+    }));
     return { reviewId, restaurantId };
   },
 
-  toggleLike: (reviewId) => {
-    // TODO: Supabase likes insert/delete
+  updateReview: async (reviewId, data) => {
+    const uid = get().currentUserId;
+    if (!uid) return { error: "Not signed in" };
+    const existing = get().reviews.find((r) => r.id === reviewId && r.userId === uid);
+    if (!existing) return { error: "Review not found" };
+
+    if (get().useSupabase) {
+      try {
+        const updated = await supabaseApi.updateReviewDb(uid, reviewId, data);
+        set((s) => ({
+          reviews: s.reviews.map((r) => (r.id === reviewId ? updated : r)),
+        }));
+        return { ok: true };
+      } catch (e) {
+        return { error: e instanceof Error ? e.message : "Update failed" };
+      }
+    }
+
+    set((s) => ({
+      reviews: s.reviews.map((r) =>
+        r.id === reviewId ? { ...r, ...data } : r,
+      ),
+    }));
+    return { ok: true };
+  },
+
+  deleteReview: async (reviewId) => {
+    const uid = get().currentUserId;
+    if (!uid) return { error: "Not signed in" };
+    const existing = get().reviews.find((r) => r.id === reviewId && r.userId === uid);
+    if (!existing) return { error: "Review not found" };
+
+    if (get().useSupabase) {
+      try {
+        await supabaseApi.deleteReviewDb(uid, reviewId);
+        set((s) => ({
+          reviews: s.reviews.filter((r) => r.id !== reviewId),
+          dishes: s.dishes.filter((d) => d.reviewId !== reviewId),
+          likes: s.likes.filter((l) => l.reviewId !== reviewId),
+          comments: s.comments.filter((c) => c.reviewId !== reviewId),
+          reviewPhotos: s.reviewPhotos.filter((p) => p.reviewId !== reviewId),
+        }));
+        return { ok: true };
+      } catch (e) {
+        return { error: e instanceof Error ? e.message : "Delete failed" };
+      }
+    }
+
+    set((s) => ({
+      reviews: s.reviews.filter((r) => r.id !== reviewId),
+      dishes: s.dishes.filter((d) => d.reviewId !== reviewId),
+      likes: s.likes.filter((l) => l.reviewId !== reviewId),
+      comments: s.comments.filter((c) => c.reviewId !== reviewId),
+      reviewPhotos: s.reviewPhotos.filter((p) => p.reviewId !== reviewId),
+    }));
+    return { ok: true };
+  },
+
+  toggleLike: async (reviewId) => {
     const uid = get().currentUserId;
     if (!uid) return;
     const existing = get().likes.find((l) => l.reviewId === reviewId && l.userId === uid);
-    if (existing) set((s) => ({ likes: s.likes.filter((l) => l.id !== existing.id) }));
-    else set((s) => ({ likes: [...s.likes, { id: generateId("like"), reviewId, userId: uid, createdAt: new Date().toISOString() }] }));
+    const tempId = `opt-like-${reviewId}`;
+
+    if (existing) {
+      set((s) => ({ likes: s.likes.filter((l) => l.id !== existing.id) }));
+    } else {
+      set((s) => ({
+        likes: [...s.likes, { id: tempId, reviewId, userId: uid, createdAt: new Date().toISOString() }],
+      }));
+    }
+
+    if (get().useSupabase) {
+      try {
+        const result = await supabaseApi.toggleLikeDb(uid, reviewId, existing?.id);
+        set((s) => {
+          const likes = s.likes.filter((l) => l.id !== tempId && l.id !== existing?.id);
+          if (result) return { likes: [...likes, result] };
+          return { likes };
+        });
+      } catch (e) {
+        console.error("Like failed:", e);
+        set((s) => {
+          let likes = s.likes.filter((l) => l.id !== tempId);
+          if (existing) likes = [...likes, existing];
+          return { likes };
+        });
+      }
+      return;
+    }
+
+    if (existing) return;
+
+    const review = get().reviews.find((r) => r.id === reviewId);
+    const actor = get().getUser(uid);
+    set((s) => {
+      const likes = s.likes.filter((l) => l.id !== tempId).concat({
+        id: generateId("like"),
+        reviewId,
+        userId: uid,
+        createdAt: new Date().toISOString(),
+      });
+      const notifications =
+        review && review.userId !== uid
+          ? [
+              {
+                id: generateId("notif"),
+                userId: review.userId,
+                actorId: uid,
+                type: "like" as const,
+                reviewId,
+                message: `${actor?.displayName ?? "Someone"} liked your review`,
+                read: false,
+                createdAt: new Date().toISOString(),
+              },
+              ...s.notifications,
+            ]
+          : s.notifications;
+      return { likes, notifications };
+    });
   },
 
-  addComment: (reviewId, text) => {
-    // TODO: Supabase comments insert
+  addComment: async (reviewId, text) => {
     const uid = get().currentUserId;
     if (!uid || !text.trim()) return;
-    set((s) => ({ comments: [...s.comments, { id: generateId("c"), reviewId, userId: uid, text: text.trim(), createdAt: new Date().toISOString() }] }));
+
+    if (get().useSupabase) {
+      try {
+        const comment = await supabaseApi.addCommentDb(uid, reviewId, text);
+        set((s) => ({ comments: [...s.comments, comment] }));
+      } catch (e) {
+        console.error("Comment failed:", e);
+      }
+      return;
+    }
+
+    const review = get().reviews.find((r) => r.id === reviewId);
+    const actor = get().getUser(uid);
+    set((s) => ({
+      comments: [...s.comments, { id: generateId("c"), reviewId, userId: uid, text: text.trim(), createdAt: new Date().toISOString() }],
+      notifications:
+        review && review.userId !== uid
+          ? [
+              {
+                id: generateId("notif"),
+                userId: review.userId,
+                actorId: uid,
+                type: "comment" as const,
+                reviewId,
+                message: `${actor?.displayName ?? "Someone"} commented on your review`,
+                read: false,
+                createdAt: new Date().toISOString(),
+              },
+              ...s.notifications,
+            ]
+          : s.notifications,
+    }));
   },
 
-  toggleFollow: (userId) => {
-    // TODO: Supabase follows insert/delete
+  toggleFollow: async (userId) => {
     const uid = get().currentUserId;
     if (!uid || uid === userId) return;
     const existing = get().follows.find((f) => f.followerId === uid && f.followingId === userId);
-    if (existing) set((s) => ({ follows: s.follows.filter((f) => f.id !== existing.id) }));
-    else set((s) => ({ follows: [...s.follows, { id: generateId("f"), followerId: uid, followingId: userId, createdAt: new Date().toISOString() }] }));
+    const tempId = `opt-follow-${userId}`;
+
+    if (existing) {
+      set((s) => ({ follows: s.follows.filter((f) => f.id !== existing.id) }));
+    } else {
+      set((s) => ({
+        follows: [...s.follows, { id: tempId, followerId: uid, followingId: userId, createdAt: new Date().toISOString() }],
+      }));
+    }
+
+    if (get().useSupabase) {
+      try {
+        const result = await supabaseApi.toggleFollowDb(uid, userId, existing?.id);
+        set((s) => {
+          const follows = s.follows.filter((f) => f.id !== tempId && f.id !== existing?.id);
+          if (result) return { follows: [...follows, result] };
+          return { follows };
+        });
+      } catch (e) {
+        console.error("Follow failed:", e);
+        set((s) => {
+          let follows = s.follows.filter((f) => f.id !== tempId);
+          if (existing) follows = [...follows, existing];
+          return { follows };
+        });
+      }
+      return;
+    }
+
+    if (existing) return;
+
+    const actor = get().getUser(uid);
+    set((s) => ({
+      follows: s.follows.filter((f) => f.id !== tempId).concat({
+        id: generateId("f"),
+        followerId: uid,
+        followingId: userId,
+        createdAt: new Date().toISOString(),
+      }),
+      notifications: [
+        {
+          id: generateId("notif"),
+          userId,
+          actorId: uid,
+          type: "follow" as const,
+          reviewId: null,
+          message: `${actor?.displayName ?? "Someone"} started following you`,
+          read: false,
+          createdAt: new Date().toISOString(),
+        },
+        ...s.notifications,
+      ],
+    }));
   },
 
   getUser: (id) => get().users.find((u) => u.id === id),
@@ -150,8 +667,377 @@ export const useAppStore = create<AppState>((set, get) => ({
   getReview: (id) => get().reviews.find((r) => r.id === id),
   getDish: (id) => get().dishes.find((d) => d.id === id),
   getReviewPhoto: (reviewId) => get().reviewPhotos.find((p) => p.reviewId === reviewId),
+  getReviewPhotos: (reviewId) => get().reviewPhotos.filter((p) => p.reviewId === reviewId),
   isFollowing: (id) => get().follows.some((f) => f.followerId === get().currentUserId && f.followingId === id),
   isLiked: (reviewId) => get().likes.some((l) => l.reviewId === reviewId && l.userId === get().currentUserId),
   likeCount: (reviewId) => get().likes.filter((l) => l.reviewId === reviewId).length,
   getComments: (reviewId) => get().comments.filter((c) => c.reviewId === reviewId),
+
+  requestPasswordReset: async (email) => {
+    if (!get().useSupabase) return { ok: true };
+    try {
+      await tier1.resetPassword(email);
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : "Reset failed" };
+    }
+  },
+
+  updatePassword: async (password) => {
+    if (password.length < 8) return { ok: false, error: "Password must be at least 8 characters" };
+    if (!get().useSupabase) return { ok: true };
+    try {
+      await tier1.updatePassword(password);
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : "Update failed" };
+    }
+  },
+
+  completeTasteQuiz: async (cuisines) => {
+    const uid = get().currentUserId;
+    if (!uid) return { ok: false, error: "Not signed in" };
+    if (cuisines.length < 3) return { ok: false, error: "Pick at least 3 cuisines" };
+
+    if (get().useSupabase) {
+      try {
+        await tier1.saveTasteQuiz(uid, cuisines);
+        set((s) => ({
+          users: s.users.map((u) =>
+            u.id === uid ? { ...u, favoriteCuisines: cuisines, hasCompletedTasteQuiz: true } : u,
+          ),
+        }));
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : "Could not save preferences" };
+      }
+    }
+
+    set((s) => ({
+      users: s.users.map((u) =>
+        u.id === uid ? { ...u, favoriteCuisines: cuisines, hasCompletedTasteQuiz: true } : u
+      ),
+    }));
+    return { ok: true };
+  },
+
+  registerPush: async () => {
+    const uid = get().currentUserId;
+    if (!uid || !get().useSupabase) return;
+    try {
+      const token = await registerForPushNotifications();
+      if (token) await tier1.savePushToken(uid, token);
+    } catch (e) {
+      console.warn("Push registration failed:", e);
+    }
+  },
+
+  markNotificationsRead: async () => {
+    const uid = get().currentUserId;
+    if (!uid) return;
+    if (get().useSupabase) await tier1.markNotificationsRead(uid);
+    set((s) => ({
+      notifications: s.notifications.map((n) => ({ ...n, read: true })),
+    }));
+  },
+
+  createList: async (name, description) => {
+    const uid = get().currentUserId;
+    if (!uid) return { error: "Not signed in" };
+    if (!name.trim()) return { error: "Name is required" };
+
+    if (get().useSupabase) {
+      try {
+        const list = await tier1.createListDb(uid, name, description);
+        set((s) => ({ lists: [list, ...s.lists] }));
+        return { listId: list.id };
+      } catch (e) {
+        return { error: e instanceof Error ? e.message : "Could not create list" };
+      }
+    }
+
+    const list: List = {
+      id: generateId("list"), userId: uid, name: name.trim(), description: description.trim(),
+      isPublic: true, createdAt: new Date().toISOString(),
+    };
+    set((s) => ({ lists: [list, ...s.lists] }));
+    return { listId: list.id };
+  },
+
+  deleteList: async (listId) => {
+    if (get().useSupabase) {
+      try {
+        await tier1.deleteListDb(listId);
+      } catch (e) {
+        console.error("Delete list failed:", e);
+        return;
+      }
+    }
+    set((s) => ({
+      lists: s.lists.filter((l) => l.id !== listId),
+      listItems: s.listItems.filter((li) => li.listId !== listId),
+    }));
+  },
+
+  addListItem: async (listId, restaurantId, note = "") => {
+    const position = get().listItems.filter((li) => li.listId === listId).length + 1;
+
+    if (get().useSupabase) {
+      try {
+        const item = await tier1.addListItemDb(listId, restaurantId, note, position);
+        set((s) => ({ listItems: [...s.listItems, item] }));
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : "Could not add restaurant" };
+      }
+    }
+
+    const item: ListItem = {
+      id: generateId("li"), listId, restaurantId, note, position,
+      createdAt: new Date().toISOString(),
+    };
+    set((s) => ({ listItems: [...s.listItems, item] }));
+    return { ok: true };
+  },
+
+  removeListItem: async (itemId) => {
+    if (get().useSupabase) {
+      try {
+        await tier1.removeListItemDb(itemId);
+      } catch (e) {
+        console.error("Remove list item failed:", e);
+        return;
+      }
+    }
+    set((s) => ({ listItems: s.listItems.filter((li) => li.id !== itemId) }));
+  },
+
+  getMyLists: () => {
+    const uid = get().currentUserId;
+    if (!uid) return [];
+    const collabListIds = new Set(
+      get().listCollaborators.filter((c) => c.userId === uid).map((c) => c.listId),
+    );
+    return get().lists.filter((l) => l.userId === uid || collabListIds.has(l.id));
+  },
+
+  canEditList: (listId) => {
+    const uid = get().currentUserId;
+    if (!uid) return false;
+    const list = get().lists.find((l) => l.id === listId);
+    if (!list) return false;
+    if (list.userId === uid) return true;
+    return get().listCollaborators.some((c) => c.listId === listId && c.userId === uid);
+  },
+
+  getListCollaborators: (listId) => get().listCollaborators.filter((c) => c.listId === listId),
+
+  inviteListCollaborator: async (listId, userId) => {
+    const uid = get().currentUserId;
+    if (!uid) return { ok: false, error: "Not signed in" };
+    const list = get().lists.find((l) => l.id === listId);
+    if (!list || list.userId !== uid) return { ok: false, error: "Only the list owner can invite" };
+    if (get().listCollaborators.some((c) => c.listId === listId && c.userId === userId)) {
+      return { ok: false, error: "Already a collaborator" };
+    }
+
+    if (get().useSupabase) {
+      try {
+        const collab = await tier1.inviteListCollaboratorDb(listId, userId);
+        set((s) => ({ listCollaborators: [...s.listCollaborators, collab] }));
+        return { ok: true };
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Could not invite";
+        if (msg.toLowerCase().includes("list_collaborators")) {
+          return { ok: false, error: "Collaborative lists need migration 004_tier_b.sql in Supabase." };
+        }
+        return { ok: false, error: msg };
+      }
+    }
+
+    const collab: ListCollaborator = {
+      id: generateId("lc"),
+      listId,
+      userId,
+      createdAt: new Date().toISOString(),
+    };
+    set((s) => ({ listCollaborators: [...s.listCollaborators, collab] }));
+    return { ok: true };
+  },
+
+  removeListCollaborator: async (collaboratorId) => {
+    if (get().useSupabase) {
+      try {
+        await tier1.removeListCollaboratorDb(collaboratorId);
+      } catch (e) {
+        console.error("Remove collaborator failed:", e);
+        return;
+      }
+    }
+    set((s) => ({ listCollaborators: s.listCollaborators.filter((c) => c.id !== collaboratorId) }));
+  },
+
+  addDish: async (reviewId, dish) => {
+    const uid = get().currentUserId;
+    if (!uid) return { error: "Not signed in" };
+    if (!dish.name.trim()) return { error: "Dish name is required" };
+
+    if (get().useSupabase) {
+      try {
+        const created = await tier1.addDishDb(uid, reviewId, dish);
+        set((s) => ({ dishes: [...s.dishes, created] }));
+        return { dishId: created.id };
+      } catch (e) {
+        return { error: e instanceof Error ? e.message : "Could not add dish" };
+      }
+    }
+
+    const review = get().reviews.find((r) => r.id === reviewId);
+    if (!review || review.userId !== uid) return { error: "Review not found" };
+    const created: Dish = {
+      id: generateId("dish"), reviewId, restaurantId: review.restaurantId,
+      name: dish.name.trim(), rating: dish.rating, notes: dish.notes,
+      photoUrl: null, isBestDish: dish.isBestDish, createdAt: new Date().toISOString(),
+    };
+    set((s) => ({ dishes: [...s.dishes, created] }));
+    return { dishId: created.id };
+  },
+
+  isBookmarked: (googlePlaceId) =>
+    get().bookmarks.some((b) => b.googlePlaceId === googlePlaceId),
+
+  isRestaurantBookmarked: (restaurant) => {
+    const placeId = restaurant.googlePlaceId ?? `restaurant:${restaurant.id}`;
+    return get().bookmarks.some(
+      (b) => b.googlePlaceId === placeId || b.restaurantId === restaurant.id,
+    );
+  },
+
+  toggleBookmark: async (place) => {
+    const uid = get().currentUserId;
+    if (!uid) return { ok: false, error: "Not signed in" };
+
+    const existing = get().bookmarks.find((b) => b.googlePlaceId === place.googlePlaceId);
+    if (existing) {
+      set((s) => ({ bookmarks: s.bookmarks.filter((b) => b.id !== existing.id) }));
+      if (get().useSupabase) {
+        try {
+          await tier2.removeBookmarkDb(existing.id);
+        } catch (e) {
+          set((s) => ({ bookmarks: [existing, ...s.bookmarks] }));
+          return { ok: false, error: e instanceof Error ? e.message : "Could not remove bookmark" };
+        }
+      }
+      return { ok: true };
+    }
+
+    const tempBookmark: Bookmark = {
+      id: `opt-bm-${place.googlePlaceId}`,
+      userId: uid,
+      restaurantId: null,
+      googlePlaceId: place.googlePlaceId,
+      placeName: place.name,
+      placeAddress: place.address,
+      placeCity: place.city,
+      placeCuisine: place.cuisine,
+      placeImageUrl: place.imageUrl,
+      latitude: place.latitude,
+      longitude: place.longitude,
+      createdAt: new Date().toISOString(),
+    };
+    set((s) => ({ bookmarks: [tempBookmark, ...s.bookmarks] }));
+
+    if (get().useSupabase) {
+      try {
+        const bookmark = await tier2.addBookmarkDb(uid, place);
+        set((s) => ({
+          bookmarks: [bookmark, ...s.bookmarks.filter((b) => b.id !== tempBookmark.id)],
+        }));
+        return { ok: true };
+      } catch (e) {
+        set((s) => ({ bookmarks: s.bookmarks.filter((b) => b.id !== tempBookmark.id) }));
+        return { ok: false, error: e instanceof Error ? e.message : "Could not save bookmark" };
+      }
+    }
+
+    const bookmark: Bookmark = {
+      id: generateId("bm"),
+      userId: uid,
+      restaurantId: null,
+      googlePlaceId: place.googlePlaceId,
+      placeName: place.name,
+      placeAddress: place.address,
+      placeCity: place.city,
+      placeCuisine: place.cuisine,
+      placeImageUrl: place.imageUrl,
+      latitude: place.latitude,
+      longitude: place.longitude,
+      createdAt: new Date().toISOString(),
+    };
+    set((s) => ({
+      bookmarks: [bookmark, ...s.bookmarks.filter((b) => b.id !== tempBookmark.id)],
+    }));
+    return { ok: true };
+  },
+
+  toggleRestaurantBookmark: async (restaurant) => {
+    const uid = get().currentUserId;
+    if (!uid) return { ok: false, error: "Not signed in" };
+
+    const placeId = restaurant.googlePlaceId ?? `restaurant:${restaurant.id}`;
+    const existing = get().bookmarks.find(
+      (b) => b.googlePlaceId === placeId || b.restaurantId === restaurant.id,
+    );
+
+    if (existing) {
+      if (get().useSupabase) {
+        try {
+          await tier2.removeBookmarkDb(existing.id);
+        } catch (e) {
+          return { ok: false, error: e instanceof Error ? e.message : "Could not remove bookmark" };
+        }
+      }
+      set((s) => ({ bookmarks: s.bookmarks.filter((b) => b.id !== existing.id) }));
+      return { ok: true };
+    }
+
+    if (get().useSupabase) {
+      try {
+        const bookmark = await tier2.addBookmarkFromRestaurantDb(uid, restaurant);
+        set((s) => ({ bookmarks: [bookmark, ...s.bookmarks] }));
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : "Could not save bookmark" };
+      }
+    }
+
+    const bookmark: Bookmark = {
+      id: generateId("bm"),
+      userId: uid,
+      restaurantId: restaurant.id,
+      googlePlaceId: placeId,
+      placeName: restaurant.name,
+      placeAddress: restaurant.address,
+      placeCity: restaurant.city,
+      placeCuisine: restaurant.cuisine,
+      placeImageUrl: restaurant.imageUrl,
+      latitude: restaurant.latitude ?? null,
+      longitude: restaurant.longitude ?? null,
+      createdAt: new Date().toISOString(),
+    };
+    set((s) => ({ bookmarks: [bookmark, ...s.bookmarks] }));
+    return { ok: true };
+  },
+
+  removeBookmark: async (bookmarkId) => {
+    if (get().useSupabase) {
+      try {
+        await tier2.removeBookmarkDb(bookmarkId);
+      } catch (e) {
+        console.error("Remove bookmark failed:", e);
+        return;
+      }
+    }
+    set((s) => ({ bookmarks: s.bookmarks.filter((b) => b.id !== bookmarkId) }));
+  },
 }));

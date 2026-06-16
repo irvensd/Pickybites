@@ -1,6 +1,7 @@
 import { Pressable, Text, ActivityIndicator, type PressableProps } from "react-native";
 import { cn } from "@/lib/utils";
 import { hapticLight } from "@/lib/haptics";
+import { useThemedColors } from "@/lib/useThemedColors";
 
 interface ButtonProps extends PressableProps {
   label: string;
@@ -11,11 +12,12 @@ interface ButtonProps extends PressableProps {
 }
 
 export function Button({ label, variant = "primary", loading, className, disabled, haptic = true, onPress, ...props }: ButtonProps) {
+  const colors = useThemedColors();
   const base = "rounded-2xl py-4 px-6 items-center justify-center min-h-[52px]";
   const variants = {
-    primary: "bg-savr-600 active:bg-savr-700",
-    secondary: "bg-white dark:bg-savr-800 border border-savr-200 dark:border-savr-700 active:bg-savr-50 dark:active:bg-savr-700",
-    ghost: "bg-transparent active:bg-savr-100 dark:active:bg-savr-800",
+    primary: "bg-savr-600 dark:bg-savr-500 active:bg-savr-700 dark:active:bg-savr-600",
+    secondary: "bg-white dark:bg-savr-875 active:bg-savr-50 dark:active:bg-savr-800",
+    ghost: "bg-transparent active:bg-savr-100 dark:active:bg-savr-925",
     danger: "bg-red-500 active:bg-red-600",
     demo: "bg-savr-900 dark:bg-savr-600 active:opacity-90",
   };
@@ -40,7 +42,7 @@ export function Button({ label, variant = "primary", loading, className, disable
       {...props}
     >
       {loading ? (
-        <ActivityIndicator color={variant === "primary" || variant === "danger" || variant === "demo" ? "#fff" : "#A85D3F"} />
+        <ActivityIndicator color={variant === "primary" || variant === "danger" || variant === "demo" ? "#fff" : colors.brand} />
       ) : (
         <Text className={textVariants[variant]}>{label}</Text>
       )}

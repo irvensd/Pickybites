@@ -8,8 +8,20 @@ export function formatRating(r: number) {
   return r.toFixed(1);
 }
 
-export function formatPrice(level: number) {
-  return "$".repeat(level);
+/** Clamp to 1–4 $ symbols; returns empty string for unknown/invalid levels. */
+export function formatPrice(level: number | undefined | null) {
+  const n = Number(level);
+  if (!Number.isFinite(n)) return "";
+  const clamped = Math.min(4, Math.max(1, Math.round(n)));
+  return "$".repeat(clamped);
+}
+
+/** US-friendly distance label from meters. */
+export function formatDistance(meters: number) {
+  const miles = meters / 1609.34;
+  if (miles < 0.1) return "< 0.1 mi";
+  if (miles < 10) return `${miles.toFixed(1)} mi`;
+  return `${Math.round(miles)} mi`;
 }
 
 export function formatDate(d: string) {
