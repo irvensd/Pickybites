@@ -21,6 +21,7 @@ import { searchNearbyRestaurants, searchAreaRestaurants, isGooglePlacesConfigure
 import type { PlaceResult, Coordinates } from "@/lib/places/types";
 import { DiscoverMap } from "@/components/maps/DiscoverMap";
 import { getTrendingRestaurants } from "@/lib/trending";
+import { DISCOVER_TABS, filterRestaurantsForTab, type DiscoverTab } from "@/lib/discover-curated";
 import { friendlyError } from "@/lib/errors";
 import { hapticSuccess } from "@/lib/haptics";
 import { formatDistance } from "@/lib/utils";
@@ -28,6 +29,8 @@ import { MAX_DISCOVER_RADIUS_METERS } from "@/lib/places/nearby-search";
 import { AddToListSheet } from "@/components/lists/AddToListSheet";
 import { DiscoverSectionHeader } from "@/components/discover/DiscoverSectionHeader";
 import { DishPickCarousel } from "@/components/discover/DishPickCarousel";
+import { FadeInView } from "@/components/ui/FadeInView";
+import { getCommunityRating } from "@/lib/restaurant-tags";
 
 const METERS_PER_MILE = 1609.34;
 
@@ -51,7 +54,7 @@ export default function DiscoverScreen() {
   const {
     currentUserId, users, reviews, restaurants, dishes, follows,
     refreshFeed, isRefreshing, ensureRestaurantFromPlace,
-    toggleBookmark, isBookmarked,
+    toggleBookmark, isBookmarked, toggleRestaurantBookmark, isRestaurantBookmarked, bookmarks,
   } = useAppStore();
   const user = users.find((u) => u.id === currentUserId);
   const userCity = user?.city;
@@ -64,8 +67,17 @@ export default function DiscoverScreen() {
   const [radiusMeters, setRadiusMeters] = useState(DEFAULT_RADIUS);
   const [isAreaSearch, setIsAreaSearch] = useState(false);
   const [addToListTarget, setAddToListTarget] = useState<{ id: string; name: string } | null>(null);
+  const [curatedTab, setCuratedTab] = useState<DiscoverTab>("for-you");
+  const [mapMounted, setMapMounted] = useState(false);
 
-  const recs = currentUserId ? getRecommendations(currentUserId, reviews, restaurants, follows, 3, user) : [];
+  const recs = currentUserId ? getRecommendations(currentUserId, reviews, restaurants, follows, 3, user, bookmarks) : [];
+  let curatedRestaurants = useMemo(() => {
+    let items = filterRestaurantsForTab(curatedTab, restaurants, reviews, bookmarks, currentUserId, {
+      userCoords: coords,
+    });
+    if (cuisine) items = items.filter((r) => r.cuisine === cuisine);
+    return items.slice(0, 12);
+  }, [curatedTab, restaurants, reviews, bookmarks, currentUserId, cuisine, coords]);
   const dishPicks = currentUserId
     ? getDishDiscoveries(currentUserId, reviews, dishes, restaurants, {
         cuisine: (cuisine as Cuisine) ?? user?.favoriteCuisines[0],
@@ -134,6 +146,15 @@ export default function DiscoverScreen() {
     loadNearby({ radius: DEFAULT_RADIUS, area: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!mapMode) {
+      setMapMounted(false);
+      return;
+    }
+    const id = requestAnimationFrame(() => setMapMounted(true));
+    return () => cancelAnimationFrame(id);
+  }, [mapMode]);
 
   useEffect(() => {
     if (mapMode) loadNearby({ radius: radiusMeters, area: isAreaSearch });
@@ -248,9 +269,6 @@ export default function DiscoverScreen() {
 
   const toggleMap = (map: boolean) => {
     setMapMode(map);
-    if (map && radiusMeters < DISTANCE_OPTIONS[4].meters) {
-      selectDistance(DISTANCE_OPTIONS[4].meters);
-    }
   };
 
   const cuisineFilters = (
@@ -305,6 +323,19 @@ export default function DiscoverScreen() {
       {cuisineFilters}
 
       {!mapMode && isGooglePlacesConfigured() && distanceFilters}
+
+      {!mapMode && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-2">
+          {DISCOVER_TABS.map((tab) => (
+            <Tag
+              key={tab.value}
+              label={tab.label}
+              active={curatedTab === tab.value}
+              onPress={() => setCuratedTab(tab.value)}
+            />
+          ))}
+        </ScrollView>
+      )}
     </View>
   );
 
@@ -339,7 +370,7 @@ export default function DiscoverScreen() {
             <ActivityIndicator color={colors.spinner} size="large" />
             <Text className={`mt-3 ${ui.text.muted}`}>Loading map…</Text>
           </View>
-        ) : coords ? (
+        ) : coords && mapMounted ? (
           <View className="flex-1 px-4 pb-4">
             <DiscoverMap
               fullScreen
@@ -354,6 +385,11 @@ export default function DiscoverScreen() {
               onAddToListPin={handleMapAddToList}
               isPinBookmarked={(id, type) => type === "nearby" && isBookmarked(id)}
             />
+          </View>
+        ) : coords && !mapMounted ? (
+          <View className="flex-1 items-center justify-center">
+            <ActivityIndicator color={colors.spinner} size="large" />
+            <Text className={`mt-3 ${ui.text.muted}`}>Opening map…</Text>
           </View>
         ) : (
           <View className="flex-1 items-center justify-center px-6">
@@ -388,6 +424,35 @@ export default function DiscoverScreen() {
         {stickyHeader}
 
         <View className="px-4 gap-6 pt-2">
+          {curatedRestaurants.length > 0 && (
+            <FadeInView key={curatedTab} className="gap-3">
+              <DiscoverSectionHeader
+                icon="sparkles"
+                iconColor={colors.brand}
+                title={DISCOVER_TABS.find((t) => t.value === curatedTab)?.label ?? "Curated"}
+                subtitle="Picked from your taste profile and community activity"
+              />
+              <View className="gap-3">
+                {curatedRestaurants.map((r, i) => (
+                  <RestaurantCard
+                    key={r.id}
+                    restaurant={r}
+                    reviews={reviews}
+                    bookmarks={bookmarks}
+                    userCity={userCity}
+                    index={i}
+                    isBookmarked={isRestaurantBookmarked(r)}
+                    onBookmark={async () => {
+                      const result = await toggleRestaurantBookmark(r);
+                      if (result.ok) hapticSuccess();
+                      else if (!result.ok) Alert.alert("Save", result.error);
+                    }}
+                  />
+                ))}
+              </View>
+            </FadeInView>
+          )}
+
           {dishPicks.length > 0 && (
             <View className="gap-3">
               <DiscoverSectionHeader
@@ -412,23 +477,33 @@ export default function DiscoverScreen() {
               {loadingNearby ? (
                 <ActivityIndicator color={colors.spinner} className="py-8" />
               ) : nearbyFiltered.length > 0 ? (
-                <View className="gap-2">
-                  {nearbyFiltered.map((place) => (
-                    <PlaceResultCard
-                      key={place.googlePlaceId}
-                      place={place}
-                      actionLabel={getPlaceRating(place) != null ? "View" : "Rate"}
-                      savrRating={getPlaceRating(place)}
-                      onPress={() => openPlace(place)}
-                      distanceMeters={coords ? distanceMeters(coords, place) : undefined}
-                      isBookmarked={isBookmarked(place.googlePlaceId)}
-                      onBookmark={() => handleBookmark(place)}
-                      onAddToList={async () => {
-                        const result = await ensureRestaurantFromPlace(place);
-                        if (!("error" in result)) openAddToList(result.id, place.name);
-                      }}
-                    />
-                  ))}
+                <View className="gap-3">
+                  {nearbyFiltered.map((place, i) => {
+                    const linked = restaurants.find((r) => r.googlePlaceId === place.googlePlaceId);
+                    const community = linked ? getCommunityRating(linked.id, reviews) : null;
+                    return (
+                      <PlaceResultCard
+                        key={place.googlePlaceId}
+                        place={place}
+                        index={i}
+                        savrRating={community?.avgRating ?? getPlaceRating(place)}
+                        reviewCount={community?.reviewCount}
+                        restaurantId={linked?.id}
+                        reviews={reviews}
+                        bookmarks={bookmarks}
+                        restaurants={restaurants}
+                        userCity={userCity}
+                        onPress={() => openPlace(place)}
+                        distanceMeters={coords ? distanceMeters(coords, place) : undefined}
+                        isBookmarked={isBookmarked(place.googlePlaceId)}
+                        onBookmark={() => handleBookmark(place)}
+                        onAddToList={async () => {
+                          const result = await ensureRestaurantFromPlace(place);
+                          if (!("error" in result)) openAddToList(result.id, place.name);
+                        }}
+                      />
+                    );
+                  })}
                 </View>
               ) : (
                 <EmptyState
@@ -453,17 +528,21 @@ export default function DiscoverScreen() {
                 title={`Trending${userCity ? ` in ${userCity}` : ""}`}
                 subtitle="Most reviewed this week"
               />
-              <View className="gap-2">
-                {trending.map(({ restaurant, reviewCount }) => (
-                  <View key={restaurant.id}>
-                    <RestaurantCard
-                      restaurant={restaurant}
-                      rating={avgRating(reviews.filter((r) => r.restaurantId === restaurant.id))}
-                    />
-                    <Text className={`text-xs px-1 mt-1 ${ui.text.faint}`}>
-                      {reviewCount} review{reviewCount === 1 ? "" : "s"} this week
-                    </Text>
-                  </View>
+              <View className="gap-3">
+                {trending.map(({ restaurant }, i) => (
+                  <RestaurantCard
+                    key={restaurant.id}
+                    restaurant={restaurant}
+                    reviews={reviews}
+                    bookmarks={bookmarks}
+                    userCity={userCity}
+                    index={i}
+                    isBookmarked={isRestaurantBookmarked(restaurant)}
+                    onBookmark={async () => {
+                      const result = await toggleRestaurantBookmark(restaurant);
+                      if (result.ok) hapticSuccess();
+                    }}
+                  />
                 ))}
               </View>
             </View>
@@ -477,10 +556,16 @@ export default function DiscoverScreen() {
                 title="Picked for you"
                 subtitle="From your ratings and follows"
               />
-              <View className="gap-2">
-                {recs.map((rec) => (
+              <View className="gap-3">
+                {recs.map((rec, i) => (
                   <View key={rec.restaurant.id}>
-                    <RestaurantCard restaurant={rec.restaurant} />
+                    <RestaurantCard
+                      restaurant={rec.restaurant}
+                      reviews={reviews}
+                      bookmarks={bookmarks}
+                      userCity={userCity}
+                      index={i}
+                    />
                     <Text className={`text-xs px-1 mt-1 ${ui.text.muted}`}>{rec.reason}</Text>
                   </View>
                 ))}
@@ -496,12 +581,15 @@ export default function DiscoverScreen() {
                 title={`Rated on ${APP_NAME}`}
                 subtitle={`${savrRestaurants.length} in your taste map`}
               />
-              <View className="gap-2">
-                {savrRestaurants.slice(0, 8).map((r) => (
+              <View className="gap-3">
+                {savrRestaurants.slice(0, 8).map((r, i) => (
                   <RestaurantCard
                     key={r.id}
                     restaurant={r}
-                    rating={avgRating(reviews.filter((rev) => rev.restaurantId === r.id))}
+                    reviews={reviews}
+                    bookmarks={bookmarks}
+                    userCity={userCity}
+                    index={i}
                   />
                 ))}
               </View>

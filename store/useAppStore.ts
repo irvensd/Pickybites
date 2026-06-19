@@ -14,6 +14,7 @@ import { registerForPushNotifications, showLocalNotification } from "@/lib/push"
 import * as tier2 from "@/lib/supabase/tier2";
 import type { Comment, Cuisine, Dish, Follow, Like, List, ListItem, ListCollaborator, Restaurant, Review, ReviewPhoto, ReviewTag, User, AppNotification, Bookmark } from "@/lib/types";
 import { APP_NAME } from "@/constants/branding";
+import { validateReviewSubmit } from "@/lib/review-validation";
 import { generateId } from "@/lib/utils";
 import { loadHasSeenOnboarding, saveHasSeenOnboarding } from "@/lib/prefs";
 
@@ -395,6 +396,26 @@ export const useAppStore = create<AppState>((set, get) => ({
   addReview: async (data) => {
     const uid = get().currentUserId;
     if (!uid) return { error: "Not signed in" };
+
+    const validation = validateReviewSubmit({
+      restaurantId: data.restaurantId,
+      restaurantName: data.restaurantName ?? data.place?.name,
+      placeName: data.place?.name,
+      rating: data.rating,
+      text: data.text,
+      visitDate: data.visitDate,
+      cuisine: data.cuisine ?? data.place?.cuisine,
+      city: data.city ?? data.place?.city,
+      priceLevel: data.priceLevel ?? data.place?.priceLevel,
+      tags: data.tags,
+      dishes: data.dishes.map((d) => ({
+        name: d.name,
+        rating: d.rating,
+        notes: d.notes,
+        isBestDish: d.isBestDish,
+      })),
+    });
+    if (!validation.ok) return { error: validation.error };
 
     if (get().useSupabase) {
       try {

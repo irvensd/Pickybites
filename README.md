@@ -192,6 +192,67 @@ eas submit --platform ios
 
 See [Expo EAS Build docs](https://docs.expo.dev/build/introduction/).
 
+## Core systems (Reviews, Rankings, Taste DNA, Journal)
+
+ForkLoop’s app logic lives in TypeScript modules backed by Supabase (or mock data in demo mode).
+
+### Environment variables
+
+```env
+EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+EXPO_PUBLIC_GOOGLE_PLACES_API_KEY=your-google-key
+```
+
+### Database setup
+
+1. Run `supabase/schema.sql` in the SQL Editor (base tables + RLS + storage buckets).
+2. Run migrations in order: `001_google_places.sql` → `002_tier1.sql` → `003_tier2.sql` → `004_tier_b.sql` → **`005_core_systems.sql`**.
+3. Create storage buckets `avatars` and `review-photos` (public read) if not already present.
+
+**Naming map (spec → app):**
+
+| Spec table | App table |
+|------------|-----------|
+| `profiles` | `users` (view: `profiles`) |
+| `dish_reviews` | `dishes` (view: `dish_reviews`) |
+| `saved_restaurants` | `bookmarks` (view: `saved_restaurants`) |
+
+### Row Level Security
+
+RLS is enabled on all core tables. Users can read public restaurant/review data; writes are scoped to `auth.uid()` for reviews, dishes, photos, bookmarks, lists, and follows. See `supabase/schema.sql` and `005_core_systems.sql`.
+
+### Demo mode
+
+If Supabase env vars are missing, the app uses in-memory mock data (`lib/mock-data.ts`). **Try Demo — Alex Rivera** skips auth setup. Reviews, rankings, Taste DNA, and journal still work locally but do not persist.
+
+### Rankings engine (`lib/rankings.ts`)
+
+- **`getUserRestaurantRankings`** — user’s restaurants sorted by rating → visit date → name.
+- **`getUserDishRankings`** — dishes sorted by rating → favorite flag → recency.
+- **`getCommunityRestaurantScore`** — Bayesian weighted score: `(avg × count + 7.0 × 5) / (count + 5)` to reduce single-review outliers.
+- **`getCityRankings`** — community-weighted leaderboard for a city/cuisine.
+
+### Taste DNA (`lib/taste-dna.ts`)
+
+- **`calculateCoreTasteDna`** — returns taste label, top cuisine, scores, top restaurants/dishes.
+- Scores use review tags and cuisine diversity; empty profiles show **“Not enough reviews yet”** instead of raw zeros.
+- Labels include New Explorer, Flavor Explorer, Hidden Gem Hunter, Date Night Curator, Plant-Based Scout, Selective Taster, Comfort Food Regular.
+
+### Food journal (`lib/foodJournal.ts`)
+
+- **`getFoodJournal`** — groups reviews by month with visit counts, cuisines, average rating, top meal, photos, and dishes.
+
+### Hooks
+
+| Hook | Purpose |
+|------|---------|
+| `useReviews` | My reviews, activity feed, CRUD |
+| `useRankings` | Personal restaurant/dish rankings |
+| `useTasteDna` | Core Taste DNA profile |
+| `useFoodJournal` | Monthly journal timeline |
+| `useSavedRestaurants` | Want To Try list (bookmarks) |
+
 ## Fallback mode
 
 If `.env` is missing, the app falls back to local mock data (no persistence).

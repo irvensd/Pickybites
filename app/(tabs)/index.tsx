@@ -1,70 +1,33 @@
-import { useMemo, useCallback } from "react";
-import { View, Text, RefreshControl, Pressable } from "react-native";
-import { FlashList } from "@shopify/flash-list";
+import { useMemo, useCallback, useState, useEffect } from "react";
+import { View, Text, ScrollView, RefreshControl, Pressable } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppStore } from "@/store/useAppStore";
 import { getRecommendations } from "@/lib/recommendations";
-import { ReviewCard } from "@/components/reviews/ReviewCard";
+import { calculateTasteDNA } from "@/lib/taste-dna";
+import { getTrendingRestaurants, getMostSavedThisWeek, getHighestRatedThisWeek } from "@/lib/trending";
+import { loadTastePreferences } from "@/lib/taste-preferences";
 import { ForYouCarousel } from "@/components/recommendations/ForYouCarousel";
-import { EmptyState } from "@/components/ui/EmptyState";
-import { Card } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
+import { TasteProfileSection } from "@/components/home/TasteProfileSection";
+import { TrendingNearYouSection } from "@/components/home/TrendingNearYouSection";
+import { WantToTrySection } from "@/components/home/WantToTrySection";
+import { GettingStartedCard } from "@/components/home/GettingStartedCard";
+import { FoodJournalSection, MonthlyRecapCard } from "@/components/home/FoodJournalSection";
+import { getMonthStats } from "@/lib/journal-stats";
+import { useReviews } from "@/hooks/useReviews";
+import { useTasteDna } from "@/hooks/useTasteDna";
+import { useSavedRestaurants } from "@/hooks/useSavedRestaurants";
+import { ReviewCard } from "@/components/reviews/ReviewCard";
 import { ReviewCardSkeleton } from "@/components/ui/Skeleton";
+import { HomeSectionHeader } from "@/components/home/HomeSectionHeader";
+import { Card } from "@/components/ui/Card";
+import { FadeInView } from "@/components/ui/FadeInView";
+import { Button } from "@/components/ui/Button";
 import { useThemedColors } from "@/lib/useThemedColors";
 import { ui } from "@/constants/ui";
 import { cn } from "@/lib/utils";
-import type { Review } from "@/lib/types";
-
-function HomeHeader({
-  displayName,
-  unread,
-  recs,
-  showFirstReviewCta,
-  colors,
-}: {
-  displayName: string;
-  unread: number;
-  recs: ReturnType<typeof getRecommendations>;
-  showFirstReviewCta: boolean;
-  colors: ReturnType<typeof useThemedColors>;
-}) {
-  return (
-    <View className="gap-5 pb-3">
-      <View className="px-4 flex-row justify-between items-start">
-        <View>
-          <Text className={`text-sm ${ui.text.muted}`}>Good to see you</Text>
-          <Text className={`text-3xl font-bold mt-0.5 ${ui.text.primary}`}>{displayName}</Text>
-        </View>
-        <Pressable onPress={() => router.push("/notifications")} className="p-2 relative">
-          <Ionicons name="notifications-outline" size={26} color={colors.brand} />
-          {unread > 0 && (
-            <View className="absolute top-1 right-1 bg-red-500 rounded-full min-w-[16px] h-4 items-center justify-center px-1">
-              <Text className="text-white text-[10px] font-bold">{unread > 9 ? "9+" : unread}</Text>
-            </View>
-          )}
-        </Pressable>
-      </View>
-
-      {recs.length > 0 && <ForYouCarousel recommendations={recs} />}
-
-      {showFirstReviewCta && (
-        <View className="px-4">
-          <Card className={cn("gap-3", ui.accentCard)}>
-            <Text className={`font-semibold ${ui.text.primary}`}>Start your taste map</Text>
-            <Text className={`text-sm leading-5 ${ui.text.secondary}`}>
-              Rate your first restaurant to unlock recommendations, taste matches, and your personal journal.
-            </Text>
-            <Button label="Write Your First Review" onPress={() => router.push("/add-review")} />
-          </Card>
-        </View>
-      )}
-
-      <Text className={`text-lg font-semibold px-4 ${ui.text.primary}`}>Activity Feed</Text>
-    </View>
-  );
-}
+import type { Bookmark } from "@/lib/types";
 
 export default function HomeScreen() {
   const colors = useThemedColors();
@@ -73,87 +36,178 @@ export default function HomeScreen() {
   const follows = useAppStore((s) => s.follows);
   const reviews = useAppStore((s) => s.reviews);
   const restaurants = useAppStore((s) => s.restaurants);
+  const dishes = useAppStore((s) => s.dishes);
+  const bookmarks = useAppStore((s) => s.bookmarks);
   const notifications = useAppStore((s) => s.notifications);
-  const refreshFeed = useAppStore((s) => s.refreshFeed);
-  const isRefreshing = useAppStore((s) => s.isRefreshing);
-  const isDataLoaded = useAppStore((s) => s.isDataLoaded);
-  const useSupabase = useAppStore((s) => s.useSupabase);
+
+  const [prefs, setPrefs] = useState<Awaited<ReturnType<typeof loadTastePreferences>>>(null);
+
+  useEffect(() => {
+    if (!currentUserId) return;
+    loadTastePreferences(currentUserId).then(setPrefs);
+  }, [currentUserId]);
 
   const unread = useMemo(() => notifications.filter((n) => !n.read).length, [notifications]);
+  const { activityFeed, myReviewCount, isLoading: reviewsLoading, isRefreshing, refresh } = useReviews();
+  const { dna: coreDna, isLoading: dnaLoading } = useTasteDna();
+  const { saved, isLoading: savedLoading } = useSavedRestaurants();
+  const followingCount = useMemo(
+    () => follows.filter((f) => f.followerId === currentUserId).length,
+    [follows, currentUserId],
+  );
 
-  const feed = useMemo(() => {
-    if (!currentUserId) return [] as Review[];
-    const followingIds = new Set(
-      follows.filter((f) => f.followerId === currentUserId).map((f) => f.followingId),
-    );
-    return reviews
-      .filter((r) => followingIds.has(r.userId) || r.userId === currentUserId)
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [reviews, follows, currentUserId]);
-
-  const myReviewCount = useMemo(
-    () => reviews.filter((r) => r.userId === currentUserId).length,
-    [reviews, currentUserId],
+  const dna = useMemo(
+    () => (currentUserId ? calculateTasteDNA(currentUserId, reviews, dishes, restaurants) : null),
+    [currentUserId, reviews, dishes, restaurants],
   );
 
   const recs = useMemo(
-    () => (currentUserId ? getRecommendations(currentUserId, reviews, restaurants, follows, 6, user) : []),
-    [currentUserId, reviews, restaurants, follows, user],
+    () =>
+      currentUserId
+        ? getRecommendations(currentUserId, reviews, restaurants, follows, 6, user, bookmarks, prefs)
+        : [],
+    [currentUserId, reviews, restaurants, follows, user, bookmarks, prefs],
   );
 
-  const onRefresh = useCallback(() => refreshFeed(), [refreshFeed]);
+  const myBookmarks = saved;
 
-  const renderItem = useCallback(({ item }: { item: Review }) => (
-    <View className="px-4 pb-4">
-      <ReviewCard review={item} />
-    </View>
-  ), []);
+  const mostReviewed = useMemo(
+    () => getTrendingRestaurants(user?.city, reviews, restaurants, 5),
+    [user?.city, reviews, restaurants],
+  );
+  const mostSaved = useMemo(
+    () => getMostSavedThisWeek(bookmarks, restaurants, 5),
+    [bookmarks, restaurants],
+  );
+  const highestRated = useMemo(
+    () => getHighestRatedThisWeek(user?.city, reviews, restaurants, 5),
+    [user?.city, reviews, restaurants],
+  );
 
-  const ListHeader = useCallback(() => (
-    <HomeHeader
-      displayName={user?.displayName ?? "Foodie"}
-      unread={unread}
-      recs={recs}
-      showFirstReviewCta={myReviewCount === 0}
-      colors={colors}
-    />
-  ), [user?.displayName, unread, recs, myReviewCount, colors]);
+  const monthStats = useMemo(
+    () => (currentUserId ? getMonthStats(currentUserId, reviews, restaurants, dishes) : null),
+    [currentUserId, reviews, restaurants, dishes],
+  );
 
-  const ListEmpty = useCallback(() => {
-    if (useSupabase && !isDataLoaded) {
-      return (
-        <View className="px-4 gap-4">
-          <ReviewCardSkeleton />
-          <ReviewCardSkeleton />
-        </View>
-      );
-    }
-    return (
-      <View className="px-4">
-        <EmptyState
-          icon="people-outline"
-          title="Your feed is quiet"
-          description="Follow friends to see their latest restaurant reviews and discoveries."
-          actionLabel="Find Friends"
-          onAction={() => router.push("/friends")}
-        />
-      </View>
-    );
-  }, [useSupabase, isDataLoaded]);
+  const onRefresh = useCallback(() => refresh(), [refresh]);
+  const isLoading = reviewsLoading || dnaLoading || savedLoading;
+
+  const openBookmark = useCallback(
+    async (bookmark: Bookmark) => {
+      if (bookmark.restaurantId) {
+        router.push(`/restaurant/${bookmark.restaurantId}`);
+        return;
+      }
+      if (bookmark.googlePlaceId) {
+        const existing = restaurants.find((r) => r.googlePlaceId === bookmark.googlePlaceId);
+        if (existing) {
+          router.push(`/restaurant/${existing.id}`);
+          return;
+        }
+      }
+      router.push("/bookmarks");
+    },
+    [restaurants],
+  );
 
   return (
     <SafeAreaView className={`flex-1 ${ui.screen}`} edges={["top"]}>
-      <FlashList
-        data={feed}
-        renderItem={renderItem}
-        keyExtractor={(item) => item.id}
-        ListHeaderComponent={ListHeader}
-        ListEmptyComponent={ListEmpty}
-        contentContainerStyle={{ paddingTop: 8, paddingBottom: 112 }}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerClassName="pb-28 gap-8 pt-2"
         refreshControl={
           <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.spinner} />
         }
-      />
+      >
+        {isLoading && myReviewCount === 0 && (
+          <View className="px-4 gap-4">
+            <ReviewCardSkeleton />
+            <ReviewCardSkeleton />
+          </View>
+        )}
+
+        {!isLoading && (
+        <>
+        <View className="px-4 flex-row justify-between items-start">
+          <View className="flex-1 pr-3">
+            <Text className={`text-sm ${ui.text.muted}`}>Your food companion</Text>
+            <Text className={`text-3xl font-bold mt-0.5 ${ui.text.primary}`}>{user?.displayName ?? "Foodie"}</Text>
+          </View>
+          <Pressable onPress={() => router.push("/notifications")} className="p-2 relative">
+            <Ionicons name="notifications-outline" size={26} color={colors.brand} />
+            {unread > 0 && (
+              <View className="absolute top-1 right-1 bg-red-500 rounded-full min-w-[16px] h-4 items-center justify-center px-1">
+                <Text className="text-white text-[10px] font-bold">{unread > 9 ? "9+" : unread}</Text>
+              </View>
+            )}
+          </Pressable>
+        </View>
+
+        <GettingStartedCard
+          displayName={user?.displayName ?? "Foodie"}
+          hasTasteQuiz={user?.hasCompletedTasteQuiz ?? false}
+          reviewCount={myReviewCount}
+          followingCount={followingCount}
+        />
+
+        {myReviewCount === 0 && (
+          <View className="px-4">
+            <Card className={cn("gap-3 p-5", ui.accentCard)}>
+              <Text className={`font-semibold text-lg ${ui.text.primary}`}>Start your taste map</Text>
+              <Text className={`text-sm leading-6 ${ui.text.secondary}`}>
+                Rate your first restaurant to unlock your taste profile, personalized picks, and food journal.
+              </Text>
+              <Button label="Write Your First Review" onPress={() => router.push("/add-review")} />
+            </Card>
+          </View>
+        )}
+
+        {monthStats && myReviewCount > 0 && (
+          <>
+            <FoodJournalSection stats={monthStats} />
+            <MonthlyRecapCard stats={monthStats} />
+          </>
+        )}
+
+        {dna && (myReviewCount > 0 || (user?.favoriteCuisines.length ?? 0) > 0) && (
+          <TasteProfileSection
+            dna={dna}
+            quizCuisines={user?.favoriteCuisines ?? []}
+            reviewCount={myReviewCount}
+            tasteLabel={coreDna?.taste_label}
+          />
+        )}
+
+        {recs.length > 0 && (
+          <FadeInView delay={100}>
+            <ForYouCarousel recommendations={recs} />
+          </FadeInView>
+        )}
+
+        <TrendingNearYouSection
+          mostReviewed={mostReviewed}
+          mostSaved={mostSaved}
+          highestRated={highestRated}
+        />
+
+        <WantToTrySection bookmarks={myBookmarks} onOpen={openBookmark} />
+
+        <View className="px-4 gap-3">
+          <Button label="Open Food Journal" variant="secondary" onPress={() => router.push("/journal")} />
+          <Button label="View Rankings" variant="ghost" onPress={() => router.push("/(tabs)/rankings")} />
+        </View>
+
+        {activityFeed.length > 0 && (
+          <View className="gap-3 px-4">
+            <HomeSectionHeader title="Activity Feed" subtitle="From you and people you follow" icon="people" />
+            {activityFeed.slice(0, 5).map((review) => (
+              <ReviewCard key={review.id} review={review} />
+            ))}
+          </View>
+        )}
+        </>
+        )}
+      </ScrollView>
     </SafeAreaView>
   );
 }

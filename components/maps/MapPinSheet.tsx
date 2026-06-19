@@ -1,7 +1,7 @@
 import { View, Text, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Button } from "@/components/ui/Button";
-import type { MapPinType } from "@/components/maps/DiscoverMap";
+import type { MapPinType } from "@/lib/maps/pins";
 
 export function MapPinSheet({
   title,

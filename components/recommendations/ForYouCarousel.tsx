@@ -19,7 +19,7 @@ export function ForYouCarousel({ recommendations }: { recommendations: Recommend
     <View className="gap-3">
       <View className="flex-row items-center gap-2 px-4">
         <Ionicons name="sparkles" size={18} color={colors.brand} />
-        <Text className={`text-lg font-semibold ${ui.text.primary}`}>Because you loved…</Text>
+        <Text className={`text-lg font-semibold ${ui.text.primary}`}>Best Matches For You</Text>
       </View>
       <ScrollView
         horizontal
@@ -41,12 +41,12 @@ export function ForYouCarousel({ recommendations }: { recommendations: Recommend
               {rec.restaurant.imageUrl ? (
                 <Image
                   source={{ uri: rec.restaurant.imageUrl }}
-                  style={{ width: "100%", height: 120 }}
+                  style={{ width: "100%", height: 140 }}
                   contentFit="cover"
                   transition={200}
                 />
               ) : (
-                <View className={cn("h-[120px] items-center justify-center", ui.surface.muted)}>
+                <View className={cn("h-[140px] items-center justify-center", ui.surface.muted)}>
                   <Ionicons name="restaurant" size={32} color={colors.brand} />
                 </View>
               )}

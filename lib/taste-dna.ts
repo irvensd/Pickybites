@@ -1,4 +1,7 @@
-import type { Cuisine, Dish, PriceLevel, Restaurant, Review, TasteDNA } from "./types";
+import type { Cuisine, Dish, PriceLevel, Restaurant, Review, TasteDNA, CoreTasteDna } from "./types";
+import { getCommunityRestaurantScore } from "./rankings";
+
+const LOW_COMMUNITY_REVIEW_THRESHOLD = 25;
 
 export function calculateTasteDNA(
   userId: string,
@@ -8,7 +11,7 @@ export function calculateTasteDNA(
 ): TasteDNA {
   const userReviews = reviews.filter((r) => r.userId === userId);
   if (!userReviews.length) {
-    return { favoriteCuisines: [], averageRating: 0, mostReviewedCuisine: null, preferredPriceLevel: null, adventureScore: 0, hiddenGemScore: 0, dateNightScore: 0, veganFriendlyScore: 0, topDishes: [], topRestaurants: [] };
+    return { favoriteCuisines: [], averageRating: 0, mostReviewedCuisine: null, preferredPriceLevel: null, adventureScore: 0, hiddenGemScore: 0, luxuryScore: 0, dateNightScore: 0, veganFriendlyScore: 0, topDishes: [], topRestaurants: [] };
   }
   const rMap = new Map(restaurants.map((r) => [r.id, r]));
   const cuisineStats = new Map<Cuisine, { count: number; total: number }>();
@@ -25,7 +28,19 @@ export function calculateTasteDNA(
   const prices = userReviews.map((r) => rMap.get(r.restaurantId)?.priceLevel).filter(Boolean) as PriceLevel[];
   const priceFreq = new Map<PriceLevel, number>();
   prices.forEach((p) => priceFreq.set(p, (priceFreq.get(p) ?? 0) + 1));
-  const tagScore = (tag: string) => Math.round((userReviews.filter((r) => r.tags.includes(tag as never)).length / userReviews.length) * 100);
+  const tagScore = (tag: string) =>
+    Math.round((userReviews.filter((r) => r.tags.includes(tag as never)).length / userReviews.length) * 100);
+
+  const hiddenGemTagged = userReviews.filter((r) => r.tags.includes("Hidden Gem")).length;
+  const hiddenGemLowCount = userReviews.filter((r) => {
+    const count = getCommunityRestaurantScore(r.restaurantId, reviews).review_count;
+    return count < LOW_COMMUNITY_REVIEW_THRESHOLD;
+  }).length;
+  const hiddenGemHits = hiddenGemTagged + hiddenGemLowCount;
+  const hiddenGemScore = Math.min(100, Math.round((hiddenGemHits / userReviews.length) * 100));
+
+  const avgPrice = prices.length ? prices.reduce((s, p) => s + p, 0) / prices.length : 0;
+  const uniqueCuisines = new Set(userReviews.map((r) => rMap.get(r.restaurantId)?.cuisine).filter(Boolean)).size;
   const reviewIds = new Set(userReviews.map((r) => r.id));
   const userDishes = dishes.filter((d) => reviewIds.has(d.reviewId));
   return {
@@ -33,13 +48,77 @@ export function calculateTasteDNA(
     averageRating: userReviews.reduce((s, r) => s + r.rating, 0) / userReviews.length,
     mostReviewedCuisine: mostReviewed?.[0] ?? null,
     preferredPriceLevel: Array.from(priceFreq.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null,
-    adventureScore: Math.min(100, new Set(userReviews.map((r) => rMap.get(r.restaurantId)?.cuisine)).size * 10),
-    hiddenGemScore: tagScore("Hidden Gem"),
+    adventureScore: Math.min(100, uniqueCuisines * 12),
+    hiddenGemScore,
+    luxuryScore: Math.round((avgPrice / 4) * 100),
     dateNightScore: tagScore("Date Night"),
     veganFriendlyScore: tagScore("Vegan Friendly"),
     topDishes: [...userDishes].sort((a, b) => b.rating - a.rating).slice(0, 5),
     topRestaurants: userReviews.map((r) => ({ restaurant: rMap.get(r.restaurantId)!, rating: r.rating })).filter((x) => x.restaurant).sort((a, b) => b.rating - a.rating).slice(0, 5),
   };
+}
+
+function resolveTasteLabel(dna: TasteDNA, totalReviews: number): string {
+  if (totalReviews < 1) return "New Explorer";
+  if (dna.adventureScore >= 75) return "Flavor Explorer";
+  if (dna.hiddenGemScore >= 60) return "Hidden Gem Hunter";
+  if (dna.dateNightScore >= 50) return "Date Night Curator";
+  if (dna.veganFriendlyScore >= 50) return "Plant-Based Scout";
+  if (dna.averageRating >= 8.5) return "Selective Taster";
+  return "Comfort Food Regular";
+}
+
+function resolveTopCuisine(dna: TasteDNA): Cuisine | string {
+  if (!dna.favoriteCuisines.length) return "Not enough reviews yet";
+  const byCount = [...dna.favoriteCuisines].sort((a, b) => b.count - a.count);
+  const topCount = byCount[0].count;
+  const tied = byCount.filter((c) => c.count === topCount);
+  if (tied.length === 1) return tied[0].cuisine;
+  return tied.sort((a, b) => b.avgRating - a.avgRating)[0].cuisine;
+}
+
+/** Spec-aligned Taste DNA engine. Never exposes raw zero scores when total_reviews is 0. */
+export function calculateCoreTasteDna(
+  userId: string,
+  reviews: Review[],
+  dishes: Dish[],
+  restaurants: Restaurant[],
+): CoreTasteDna {
+  const legacy = calculateTasteDNA(userId, reviews, dishes, restaurants);
+  const totalReviews = reviews.filter((r) => r.userId === userId).length;
+  const reviewIds = new Set(reviews.filter((r) => r.userId === userId).map((r) => r.id));
+  const totalDishes = dishes.filter((d) => reviewIds.has(d.reviewId)).length;
+  const cuisinesTried = new Set(
+    reviews
+      .filter((r) => r.userId === userId)
+      .map((r) => restaurants.find((x) => x.id === r.restaurantId)?.cuisine)
+      .filter(Boolean),
+  ).size;
+
+  const formatScore = (score: number) => (totalReviews === 0 ? 0 : score);
+
+  return {
+    taste_label: resolveTasteLabel(legacy, totalReviews),
+    top_cuisine: resolveTopCuisine(legacy),
+    average_rating: totalReviews ? Math.round(legacy.averageRating * 10) / 10 : 0,
+    total_reviews: totalReviews,
+    total_dishes: totalDishes,
+    cuisines_tried: cuisinesTried,
+    preferred_price_level: legacy.preferredPriceLevel,
+    adventure_score: formatScore(legacy.adventureScore),
+    hidden_gem_score: formatScore(legacy.hiddenGemScore),
+    date_night_score: formatScore(legacy.dateNightScore),
+    vegan_score: formatScore(legacy.veganFriendlyScore),
+    top_restaurants: legacy.topRestaurants,
+    top_dishes: legacy.topDishes,
+    legacy,
+  };
+}
+
+/** Display helper — never show raw zeros for empty profiles. */
+export function formatTasteScoreDisplay(score: number, totalReviews: number, fallback = "Not enough reviews yet") {
+  if (totalReviews === 0 || score === 0) return fallback;
+  return String(score);
 }
 
 export function calculateTasteMatch(a: string, b: string, reviews: Review[], restaurants: Restaurant[]) {

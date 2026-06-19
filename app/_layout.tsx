@@ -76,6 +76,7 @@ export default function RootLayout() {
           <Stack.Screen name="list/[id]" options={{ headerShown: true, title: "List" }} />
           <Stack.Screen name="friends" options={{ headerShown: true, title: "Friends" }} />
           <Stack.Screen name="taste-dna" options={{ headerShown: true, title: "Taste DNA" }} />
+          <Stack.Screen name="taste-unlocked" options={{ headerShown: false, gestureEnabled: false }} />
           <Stack.Screen name="journal" options={{ headerShown: true, title: "Food Journal" }} />
           <Stack.Screen name="wrapped" options={{ headerShown: true, title: "Food Wrapped" }} />
           <Stack.Screen name="settings" options={{ headerShown: true, title: "Settings" }} />

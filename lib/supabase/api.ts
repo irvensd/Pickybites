@@ -262,6 +262,7 @@ export async function createReview(
       text: data.text,
       visit_date: data.visitDate,
       tags: data.tags,
+      price_level: data.priceLevel ?? restaurant.priceLevel,
     })
     .select()
     .single();
@@ -273,6 +274,7 @@ export async function createReview(
     .map((d) => ({
       review_id: review.id,
       restaurant_id: restaurant.id,
+      user_id: userId,
       name: d.name.trim(),
       rating: d.rating,
       notes: d.notes,
@@ -295,7 +297,7 @@ export async function createReview(
   if (photoUrls.length > 0) {
     const { data: photoRows, error: photoError } = await supabase
       .from("review_photos")
-      .insert(photoUrls.map((url) => ({ review_id: review.id, url })))
+      .insert(photoUrls.map((url) => ({ review_id: review.id, url, user_id: userId })))
       .select();
     if (photoError) throw new Error(photoError.message);
     reviewPhotos = (photoRows ?? []).map(mapReviewPhoto);

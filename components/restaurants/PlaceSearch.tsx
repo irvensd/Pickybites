@@ -74,11 +74,11 @@ export function PlaceSearch({
         {loading && <ActivityIndicator size="small" color={colors.spinner} />}
       </View>
       {error && <Text className="text-sm text-red-500">{error}</Text>}
-      {results.map((place) => (
+      {results.map((place, i) => (
         <PlaceResultCard
           key={place.googlePlaceId}
           place={place}
-          actionLabel="Rate this spot"
+          index={i}
           onPress={() => onSelect(place)}
         />
       ))}

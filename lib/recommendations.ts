@@ -1,5 +1,6 @@
 import { calculateTasteDNA } from "./taste-dna";
-import type { Follow, Recommendation, Restaurant, Review, User } from "./types";
+import type { Bookmark, Follow, Recommendation, Restaurant, Review, User } from "./types";
+import type { TastePreferences } from "./taste-preferences";
 
 export function getRecommendations(
   userId: string,
@@ -8,6 +9,8 @@ export function getRecommendations(
   follows: Follow[],
   limit = 5,
   user?: User | null,
+  bookmarks: Bookmark[] = [],
+  prefs?: TastePreferences | null,
 ): Recommendation[] {
   const myReviews = reviews.filter((r) => r.userId === userId);
   const reviewed = new Set(myReviews.map((r) => r.restaurantId));
@@ -17,10 +20,18 @@ export function getRecommendations(
   const rMap = new Map(restaurants.map((r) => [r.id, r]));
   const dna = calculateTasteDNA(userId, reviews, [], restaurants);
   const quizCuisines = user?.favoriteCuisines ?? [];
-  const topCuisines = [
-    ...quizCuisines,
-    ...dna.favoriteCuisines.map((c) => c.cuisine),
-  ].filter((c, i, arr) => arr.indexOf(c) === i).slice(0, 4);
+  const topCuisines = [...quizCuisines, ...dna.favoriteCuisines.map((c) => c.cuisine)]
+    .filter((c, i, arr) => arr.indexOf(c) === i)
+    .slice(0, 4);
+
+  const savedRestaurantIds = new Set(
+    bookmarks.filter((b) => b.userId === userId && b.restaurantId).map((b) => b.restaurantId!),
+  );
+  const savedCuisines = new Set(
+    [...savedRestaurantIds]
+      .map((id) => rMap.get(id)?.cuisine)
+      .filter(Boolean),
+  );
 
   const lovedByCuisine = new Map<string, { name: string; rating: number }>();
   myReviews.forEach((rev) => {
@@ -39,6 +50,7 @@ export function getRecommendations(
 
   const tagAffinity = new Map<string, number>();
   myReviews.forEach((r) => r.tags.forEach((t) => tagAffinity.set(t, (tagAffinity.get(t) ?? 0) + 1)));
+  const topTag = [...tagAffinity.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
 
   return unreviewed
     .map((restaurant) => {
@@ -49,32 +61,56 @@ export function getRecommendations(
         score += quizCuisines.includes(restaurant.cuisine) ? 22 : 16;
         const loved = lovedByCuisine.get(restaurant.cuisine);
         if (loved && loved.rating >= 8) {
-          reasons.push(`you loved ${loved.name}`);
+          reasons.push(`You rated ${restaurant.cuisine} restaurants highly.`);
         } else if (quizCuisines.includes(restaurant.cuisine)) {
-          reasons.push(`you picked ${restaurant.cuisine} in your taste quiz`);
+          reasons.push(`You picked ${restaurant.cuisine} during onboarding.`);
         } else {
-          reasons.push(`you rate ${restaurant.cuisine} highly`);
+          reasons.push(`You rate ${restaurant.cuisine} highly.`);
         }
+      }
+
+      if (savedCuisines.has(restaurant.cuisine)) {
+        score += 14;
+        reasons.push("You frequently save similar spots.");
       }
 
       if (dna.preferredPriceLevel && restaurant.priceLevel === dna.preferredPriceLevel) {
         score += 12;
-        reasons.push("it matches your usual price range");
+        if (reasons.length < 2) reasons.push("It matches your usual budget.");
+      }
+
+      if (prefs?.budgetRange && restaurant.priceLevel === prefs.budgetRange) {
+        score += 10;
+        if (reasons.length < 2) reasons.push("Fits your budget preference.");
       }
 
       if (friendRestaurants.has(restaurant.id)) {
         score += 15;
-        reasons.push("friends rated it 8.5+");
+        reasons.push("Friends rated it 8.5+.");
+      }
+
+      if (topTag === "Hidden Gem" && restaurant.priceLevel <= 2) {
+        score += 10;
+        reasons.push("You liked similar hidden gems.");
+      } else if (topTag === "Vegan Friendly" && myReviews.some((r) => r.tags.includes("Vegan Friendly"))) {
+        score += 8;
+        reasons.push("You often tag vegan-friendly spots.");
+      } else if (topTag === "Date Night" && restaurant.priceLevel >= 3) {
+        score += 8;
+        reasons.push("Matches your date night taste.");
       }
 
       if (dna.dateNightScore > 30 && restaurant.priceLevel >= 3) score += 6;
       if (dna.hiddenGemScore > 40 && restaurant.priceLevel <= 2) score += 8;
 
+      if (prefs?.foodGoals.includes("Find hidden gems") && restaurant.priceLevel <= 2) score += 6;
+      if (prefs?.foodGoals.includes("Fine dining") && restaurant.priceLevel >= 4) score += 8;
+
       const reason =
         reasons.length > 0
-          ? `Because you loved similar spots — ${reasons.slice(0, 2).join(" and ")}.`
+          ? reasons.slice(0, 2).join(" ")
           : quizCuisines.length > 0
-            ? `Picked for your taste quiz favorites (${quizCuisines.slice(0, 2).join(", ")}).`
+            ? `Based on your onboarding picks (${quizCuisines.slice(0, 2).join(", ")}).`
             : "Based on your taste profile.";
 
       return {

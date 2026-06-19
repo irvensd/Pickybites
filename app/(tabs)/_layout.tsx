@@ -66,6 +66,15 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="journal"
+        options={{
+          title: "Journal",
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? "book" : "book-outline"} size={24} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="discover"
         options={{
           title: "Discover",
@@ -85,21 +94,18 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="rankings"
-        options={{
-          title: "Rankings",
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? "trophy" : "trophy-outline"} size={24} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="profile"
         options={{
           title: "Profile",
           tabBarIcon: ({ color, focused }) => (
             <Ionicons name={focused ? "person" : "person-outline"} size={24} color={color} />
           ),
+        }}
+      />
+      <Tabs.Screen
+        name="rankings"
+        options={{
+          href: null,
         }}
       />
     </Tabs>

@@ -11,11 +11,16 @@ export function userDeepLink(userId: string) {
   return `${APP_SCHEME}://user/${userId}`;
 }
 
+export function signupDeepLink() {
+  return `${APP_SCHEME}://signup`;
+}
+
 export async function shareInvite(displayName?: string) {
+  const link = signupDeepLink();
   const message = displayName
-    ? `${displayName} invited you to ${APP_NAME}!\n\n${INVITE_TEXT}`
-    : INVITE_TEXT;
-  await Share.share({ message, title: `Invite to ${APP_NAME}` });
+    ? `${displayName} invited you to ${APP_NAME}!\n\n${INVITE_TEXT}\n\nJoin: ${link}`
+    : `${INVITE_TEXT}\n\nJoin: ${link}`;
+  await Share.share({ message, title: `Invite to ${APP_NAME}`, url: link });
 }
 
 export async function shareRestaurant(

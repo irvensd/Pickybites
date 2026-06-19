@@ -45,3 +45,13 @@ export async function loadThemeMode(): Promise<ThemeMode | null> {
 export async function saveThemeMode(mode: ThemeMode): Promise<void> {
   await AsyncStorage.setItem(THEME_KEY, mode);
 }
+
+const GETTING_STARTED_DISMISSED_KEY = "@forkloop/getting_started_dismissed";
+
+export async function loadGettingStartedDismissed(): Promise<boolean> {
+  return (await AsyncStorage.getItem(GETTING_STARTED_DISMISSED_KEY)) === "1";
+}
+
+export async function saveGettingStartedDismissed(): Promise<void> {
+  await AsyncStorage.setItem(GETTING_STARTED_DISMISSED_KEY, "1");
+}

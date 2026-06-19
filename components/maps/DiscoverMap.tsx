@@ -1,35 +1,37 @@
 import { useMemo, useRef, useEffect, useState, useCallback } from "react";
-import { View, Text, StyleSheet, Pressable, Platform, ActivityIndicator } from "react-native";
-import MapView, { Marker, PROVIDER_DEFAULT, type Region } from "react-native-maps";
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, LayoutChangeEvent } from "react-native";
+import MapView, { PROVIDER_DEFAULT, type Region } from "react-native-maps";
 import { Ionicons } from "@expo/vector-icons";
 import type { Restaurant } from "@/lib/types";
 import type { PlaceResult, Coordinates } from "@/lib/places/types";
-import { APP_NAME } from "@/constants/branding";
 import { regionToSearchRadius } from "@/lib/places/nearby-search";
 import { loadMapRegion, saveMapRegion } from "@/lib/prefs";
+import {
+  buildMapPins,
+  isValidCoord,
+  MAX_MAP_MARKERS,
+  type MapPin,
+  type MapPinType,
+} from "@/lib/maps/pins";
 import { MapPinSheet } from "./MapPinSheet";
+import { MapMarker } from "./MapMarker";
 
-export type MapPinType = "rated" | "nearby";
+export type { MapPin, MapPinType };
 
-export type MapPin = {
-  id: string;
-  title: string;
-  latitude: number;
-  longitude: number;
-  subtitle?: string;
-  type: MapPinType;
-};
+const PIN_UPDATE_MS = 350;
+const MARKER_MOUNT_MS = 500;
 
-type ClusterPin = {
-  kind: "cluster";
-  id: string;
-  count: number;
-  latitude: number;
-  longitude: number;
-  pins: MapPin[];
-};
-
-type DisplayPin = MapPin | ClusterPin;
+function isValidRegion(r: Region) {
+  return (
+    isValidCoord(r.latitude, r.longitude) &&
+    Number.isFinite(r.latitudeDelta) &&
+    Number.isFinite(r.longitudeDelta) &&
+    r.latitudeDelta > 0.002 &&
+    r.latitudeDelta < 40 &&
+    r.longitudeDelta > 0.002 &&
+    r.longitudeDelta < 40
+  );
+}
 
 function buildRegion(coords: Coordinates, pins: MapPin[]): Region {
   if (pins.length === 0) {
@@ -55,42 +57,6 @@ function buildRegion(coords: Coordinates, pins: MapPin[]): Region {
     latitudeDelta: Math.max((maxLat - minLat) * pad, 0.02),
     longitudeDelta: Math.max((maxLng - minLng) * pad, 0.02),
   };
-}
-
-function clusterPins(pins: MapPin[], region: Region): DisplayPin[] {
-  if (pins.length < 12 || region.latitudeDelta < 0.02) return pins;
-
-  const cellLat = region.latitudeDelta / 5;
-  const cellLng = region.longitudeDelta / 5;
-  const buckets = new Map<string, MapPin[]>();
-
-  pins.forEach((pin) => {
-    const latKey = Math.floor((pin.latitude - (region.latitude - region.latitudeDelta / 2)) / cellLat);
-    const lngKey = Math.floor((pin.longitude - (region.longitude - region.longitudeDelta / 2)) / cellLng);
-    const key = `${latKey}:${lngKey}`;
-    const arr = buckets.get(key) ?? [];
-    arr.push(pin);
-    buckets.set(key, arr);
-  });
-
-  const result: DisplayPin[] = [];
-  buckets.forEach((group, key) => {
-    if (group.length < 3) {
-      result.push(...group);
-      return;
-    }
-    const latitude = group.reduce((s, p) => s + p.latitude, 0) / group.length;
-    const longitude = group.reduce((s, p) => s + p.longitude, 0) / group.length;
-    result.push({
-      kind: "cluster",
-      id: `cluster-${key}`,
-      count: group.length,
-      latitude,
-      longitude,
-      pins: group,
-    });
-  });
-  return result;
 }
 
 export function DiscoverMap({
@@ -119,72 +85,62 @@ export function DiscoverMap({
   fullScreen?: boolean;
 }) {
   const mapRef = useRef<MapView>(null);
-  const userMovedMap = useRef(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pinTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const markerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mounted = useRef(true);
+
+  const [layoutReady, setLayoutReady] = useState(false);
   const [mapRegion, setMapRegion] = useState<Region | null>(null);
   const [savedRegion, setSavedRegion] = useState<Region | null>(null);
   const [selectedPin, setSelectedPin] = useState<MapPin | null>(null);
+  const [markersReady, setMarkersReady] = useState(false);
+  const [renderPins, setRenderPins] = useState<MapPin[]>([]);
 
   useEffect(() => {
+    mounted.current = true;
     loadMapRegion().then((r) => {
-      if (r) setSavedRegion(r);
+      if (mounted.current && r && isValidRegion(r)) setSavedRegion(r);
     });
+    return () => {
+      mounted.current = false;
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      if (pinTimer.current) clearTimeout(pinTimer.current);
+      if (markerTimer.current) clearTimeout(markerTimer.current);
+    };
   }, []);
 
-  const pins = useMemo<MapPin[]>(() => {
-    const ratedIds = new Set<string>();
+  const pins = useMemo(
+    () => buildMapPins(restaurants, nearbyPlaces).slice(0, MAX_MAP_MARKERS),
+    [restaurants, nearbyPlaces],
+  );
+  const totalPinCount = useMemo(
+    () => buildMapPins(restaurants, nearbyPlaces).length,
+    [restaurants, nearbyPlaces],
+  );
+  const truncated = totalPinCount > pins.length;
 
-    const rated = restaurants
-      .filter((r) => r.latitude != null && r.longitude != null)
-      .map((r) => {
-        ratedIds.add(r.googlePlaceId ?? r.id);
-        return {
-          id: r.id,
-          title: r.name,
-          latitude: r.latitude!,
-          longitude: r.longitude!,
-          subtitle: `Rated on ${APP_NAME}`,
-          type: "rated" as const,
-        };
-      });
+  const safeCoords = isValidCoord(coords.latitude, coords.longitude)
+    ? coords
+    : { latitude: 34.0522, longitude: -118.2437 };
 
-    const nearby = nearbyPlaces
-      .filter((p) => !ratedIds.has(p.googlePlaceId))
-      .map((p) => ({
-        id: p.googlePlaceId,
-        title: p.name,
-        latitude: p.latitude,
-        longitude: p.longitude,
-        subtitle: p.cuisine,
-        type: "nearby" as const,
-      }));
-
-    return [...rated, ...nearby];
-  }, [restaurants, nearbyPlaces]);
-
-  const region = useMemo(() => buildRegion(coords, pins), [coords, pins]);
+  const region = useMemo(() => buildRegion(safeCoords, pins), [safeCoords, pins]);
   const initialRegion = savedRegion ?? region;
 
-  const displayPins = useMemo(
-    () => clusterPins(pins, mapRegion ?? initialRegion),
-    [pins, mapRegion, initialRegion],
-  );
-
+  // Debounce pin updates so rapid nearby-search refreshes don't thrash native markers.
   useEffect(() => {
-    if (!mapRef.current || pins.length === 0 || userMovedMap.current) return;
-    const timer = setTimeout(() => {
-      mapRef.current?.fitToCoordinates(
-        pins.map((p) => ({ latitude: p.latitude, longitude: p.longitude })),
-        {
-          edgePadding: { top: 60, right: 40, bottom: selectedPin ? 220 : 120, left: 40 },
-          animated: true,
-        },
-      );
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [pins, selectedPin]);
+    if (!markersReady) return;
+    if (pinTimer.current) clearTimeout(pinTimer.current);
+    pinTimer.current = setTimeout(() => {
+      if (mounted.current) setRenderPins(pins);
+    }, PIN_UPDATE_MS);
+    return () => {
+      if (pinTimer.current) clearTimeout(pinTimer.current);
+    };
+  }, [pins, markersReady]);
 
   const persistRegion = useCallback((r: Region) => {
+    if (!isValidRegion(r)) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
       saveMapRegion({
@@ -197,25 +153,31 @@ export function DiscoverMap({
   }, []);
 
   const handleSearchArea = () => {
-    const active = mapRegion ?? region;
+    const active = mapRegion ?? initialRegion;
     onSearchArea?.(
       { latitude: active.latitude, longitude: active.longitude },
       regionToSearchRadius(active),
     );
   };
 
-  const zoomToCluster = (cluster: ClusterPin) => {
-    userMovedMap.current = true;
-    mapRef.current?.animateToRegion(
-      {
-        latitude: cluster.latitude,
-        longitude: cluster.longitude,
-        latitudeDelta: Math.max((mapRegion ?? region).latitudeDelta / 3, 0.008),
-        longitudeDelta: Math.max((mapRegion ?? region).longitudeDelta / 3, 0.008),
-      },
-      400,
-    );
+  const handleLayout = (e: LayoutChangeEvent) => {
+    const { width, height } = e.nativeEvent.layout;
+    if (width > 0 && height > 0) setLayoutReady(true);
   };
+
+  const handleMapReady = useCallback(() => {
+    if (markerTimer.current) clearTimeout(markerTimer.current);
+    markerTimer.current = setTimeout(() => {
+      if (mounted.current) {
+        setMarkersReady(true);
+        setRenderPins(pins);
+      }
+    }, MARKER_MOUNT_MS);
+  }, [pins]);
+
+  const handleMarkerPress = useCallback((pin: MapPin) => {
+    setSelectedPin(pin);
+  }, []);
 
   const height = fullScreen ? undefined : 320;
 
@@ -223,49 +185,37 @@ export function DiscoverMap({
     <View
       className={fullScreen ? "flex-1" : "rounded-2xl overflow-hidden border border-savr-200 dark:border-savr-700"}
       style={fullScreen ? { flex: 1 } : { height }}
+      onLayout={handleLayout}
     >
-      <MapView
-        ref={mapRef}
-        style={StyleSheet.absoluteFill}
-        provider={PROVIDER_DEFAULT}
-        initialRegion={initialRegion}
-        showsUserLocation
-        showsMyLocationButton={Platform.OS === "android"}
-        mapPadding={{ top: 8, right: 8, bottom: selectedPin ? 200 : 88, left: 8 }}
-        onRegionChangeComplete={(r) => {
-          userMovedMap.current = true;
-          setMapRegion(r);
-          persistRegion(r);
-        }}
-      >
-        {displayPins.map((item) => {
-          if ("kind" in item && item.kind === "cluster") {
-            return (
-              <Marker
-                key={item.id}
-                coordinate={{ latitude: item.latitude, longitude: item.longitude }}
-                onPress={() => zoomToCluster(item)}
-              >
-                <View className="bg-savr-600 rounded-full min-w-[36px] h-9 px-2 items-center justify-center border-2 border-white">
-                  <Text className="text-white font-bold text-sm">{item.count}</Text>
-                </View>
-              </Marker>
-            );
-          }
-          const pin = item as MapPin;
-          return (
-            <Marker
-              key={`${pin.type}-${pin.id}`}
-              coordinate={{ latitude: pin.latitude, longitude: pin.longitude }}
-              pinColor={pin.type === "rated" ? "#A85D3F" : "#B8956F"}
-              onPress={() => setSelectedPin(pin)}
-            />
-          );
-        })}
-      </MapView>
+      {layoutReady ? (
+        <MapView
+          ref={mapRef}
+          style={fullScreen ? styles.mapFlex : styles.mapFixed}
+          provider={PROVIDER_DEFAULT}
+          initialRegion={initialRegion}
+          showsUserLocation
+          showsMyLocationButton={false}
+          moveOnMarkerPress={false}
+          loadingEnabled
+          onMapReady={handleMapReady}
+          onRegionChangeComplete={(r) => {
+            setMapRegion(r);
+            persistRegion(r);
+          }}
+        >
+          {markersReady &&
+            renderPins.map((pin) => (
+              <MapMarker key={`${pin.type}-${pin.id}`} pin={pin} onPress={handleMarkerPress} />
+            ))}
+        </MapView>
+      ) : (
+        <View className="flex-1 items-center justify-center bg-savr-100 dark:bg-savr-900">
+          <ActivityIndicator color="#A85D3F" />
+        </View>
+      )}
 
-      {pins.length === 0 && !searching && (
-        <View className="absolute inset-0 items-center justify-center bg-black/20 px-6">
+      {pins.length === 0 && !searching && layoutReady && markersReady && (
+        <View className="absolute inset-0 items-center justify-center bg-black/20 px-6 pointer-events-none">
           <View className="bg-white dark:bg-savr-800 rounded-2xl p-4 items-center gap-2 max-w-xs">
             <Ionicons name="map-outline" size={32} color="#A85D3F" />
             <Text className="font-semibold text-savr-900 dark:text-savr-100 text-center">No pins yet</Text>
@@ -282,13 +232,7 @@ export function DiscoverMap({
             onPress={handleSearchArea}
             disabled={searching}
             className="flex-row items-center gap-2 bg-savr-600 rounded-full px-4 py-2.5"
-            style={{
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.15,
-              shadowRadius: 4,
-              elevation: 4,
-            }}
+            style={styles.shadow}
           >
             {searching ? (
               <ActivityIndicator size="small" color="#fff" />
@@ -302,7 +246,10 @@ export function DiscoverMap({
         </View>
       )}
 
-      <View className="absolute bottom-3 left-3 right-3 flex-row items-center justify-between" style={{ marginBottom: selectedPin ? 160 : 0 }}>
+      <View
+        className="absolute bottom-3 left-3 right-3 flex-row items-center justify-between"
+        style={{ marginBottom: selectedPin ? 160 : 0 }}
+      >
         <View className="flex-row gap-2">
           <View className="flex-row items-center gap-1.5 bg-white/95 dark:bg-savr-900/95 px-2.5 py-1.5 rounded-full">
             <View className="w-2.5 h-2.5 rounded-full bg-savr-600" />
@@ -314,13 +261,14 @@ export function DiscoverMap({
           </View>
         </View>
         <View className="bg-white/95 dark:bg-savr-900/95 px-2.5 py-1.5 rounded-full">
-          <Text className="text-xs font-semibold text-savr-700 dark:text-savr-200">{pins.length} spots</Text>
+          <Text className="text-xs font-semibold text-savr-700 dark:text-savr-200">
+            {truncated ? `${pins.length}+ spots` : `${pins.length} spots`}
+          </Text>
         </View>
       </View>
 
       <Pressable
         onPress={() => {
-          userMovedMap.current = false;
           setSelectedPin(null);
           if (onRecenterUser) {
             onRecenterUser();
@@ -364,3 +312,15 @@ export function DiscoverMap({
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  mapFlex: { flex: 1, width: "100%" },
+  mapFixed: { ...StyleSheet.absoluteFillObject },
+  shadow: {
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+});

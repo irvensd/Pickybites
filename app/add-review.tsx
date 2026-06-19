@@ -10,10 +10,24 @@ import { Button } from "@/components/ui/Button";
 import { Tag } from "@/components/ui/Tag";
 import { Card } from "@/components/ui/Card";
 import { PlaceSearch } from "@/components/restaurants/PlaceSearch";
+import { VisitDatePicker } from "@/components/reviews/VisitDatePicker";
+import { StepProgress } from "@/components/reviews/StepProgress";
+import { Rating } from "@/components/ui/Rating";
 import { getCurrentCoordinates } from "@/lib/location";
 import { Ionicons } from "@expo/vector-icons";
+import { validateReviewSubmit } from "@/lib/review-validation";
+import { ui } from "@/constants/ui";
 
-interface DishForm { name: string; rating: number; notes: string; isBestDish: boolean; }
+const MAX_REVIEW_TEXT = 500;
+
+const STEPS = ["Restaurant", "Rating", "Favorite Dish", "Photos", "Tags", "Review"];
+
+interface DishForm {
+  name: string;
+  rating: number;
+  notes: string;
+  isBestDish: boolean;
+}
 
 export default function AddReviewScreen() {
   const { restaurantId: paramRestaurantId, reviewId: paramReviewId } = useLocalSearchParams<{
@@ -22,6 +36,8 @@ export default function AddReviewScreen() {
   }>();
   const addReview = useAppStore((s) => s.addReview);
   const updateReview = useAppStore((s) => s.updateReview);
+  const reviews = useAppStore((s) => s.reviews);
+  const currentUserId = useAppStore((s) => s.currentUserId);
   const getRestaurant = useAppStore((s) => s.getRestaurant);
   const getReview = useAppStore((s) => s.getReview);
   const ensureRestaurantFromPlace = useAppStore((s) => s.ensureRestaurantFromPlace);
@@ -29,6 +45,7 @@ export default function AddReviewScreen() {
   const editingReview = paramReviewId ? getReview(paramReviewId) : undefined;
   const isEditMode = Boolean(editingReview);
 
+  const [step, setStep] = useState(1);
   const [selectedRestaurantId, setSelectedRestaurantId] = useState<string | null>(
     editingReview?.restaurantId ?? paramRestaurantId ?? null,
   );
@@ -39,7 +56,7 @@ export default function AddReviewScreen() {
   const [visitDate, setVisitDate] = useState(editingReview?.visitDate ?? new Date().toISOString().split("T")[0]);
   const [tags, setTags] = useState<ReviewTag[]>(editingReview?.tags ?? []);
   const [photos, setPhotos] = useState<string[]>([]);
-  const [dishes, setDishes] = useState<DishForm[]>([{ name: "", rating: 8, notes: "", isBestDish: false }]);
+  const [dishes, setDishes] = useState<DishForm[]>([{ name: "", rating: 8, notes: "", isBestDish: true }]);
   const [loading, setLoading] = useState(false);
 
   const selectedRestaurant = selectedRestaurantId ? getRestaurant(selectedRestaurantId) : null;
@@ -48,6 +65,10 @@ export default function AddReviewScreen() {
   useEffect(() => {
     getCurrentCoordinates().then(setCoords);
   }, []);
+
+  useEffect(() => {
+    if (paramRestaurantId && !isEditMode) setStep(2);
+  }, [paramRestaurantId, isEditMode]);
 
   const pickPhoto = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.8 });
@@ -58,7 +79,10 @@ export default function AddReviewScreen() {
     setSelectedPlace(place);
     setSelectedRestaurantId(null);
     const result = await ensureRestaurantFromPlace(place);
-    if (!("error" in result)) setSelectedRestaurantId(result.id);
+    if (!("error" in result)) {
+      setSelectedRestaurantId(result.id);
+      setStep(2);
+    }
   };
 
   const submit = async () => {
@@ -79,90 +103,208 @@ export default function AddReviewScreen() {
       return;
     }
 
+    const wasFirstReview = reviews.filter((r) => r.userId === currentUserId).length === 0;
+    const validation = validateReviewSubmit({
+      restaurantId: selectedRestaurantId ?? undefined,
+      placeName: selectedPlace?.name,
+      restaurantName: selectedRestaurant?.name,
+      rating,
+      text,
+      visitDate,
+      cuisine: selectedRestaurant?.cuisine ?? selectedPlace?.cuisine,
+      city: selectedRestaurant?.city ?? selectedPlace?.city,
+      priceLevel: selectedRestaurant?.priceLevel ?? selectedPlace?.priceLevel,
+      tags,
+      dishes: dishes.filter((d) => d.name.trim()).map((d) => ({
+        name: d.name,
+        rating: d.rating,
+        notes: d.notes,
+        isBestDish: d.isBestDish,
+      })),
+    });
+    if (!validation.ok) {
+      Alert.alert("Review incomplete", validation.error);
+      return;
+    }
+
+    const favoriteDish = dishes.find((d) => d.name.trim());
     const result = await addReview({
       restaurantId: selectedRestaurantId ?? undefined,
       place: selectedPlace ?? undefined,
-      rating, text, visitDate, tags, photoUris: photos,
-      dishes: dishes.filter((d) => d.name.trim()).map((d) => ({
-        name: d.name, rating: d.rating, notes: d.notes, photoUrl: null, isBestDish: d.isBestDish,
-      })),
+      rating,
+      text,
+      visitDate,
+      tags,
+      photoUris: photos,
+      dishes: favoriteDish
+        ? [{
+            name: favoriteDish.name.trim(),
+            rating: favoriteDish.rating,
+            notes: favoriteDish.notes,
+            photoUrl: null,
+            isBestDish: true,
+          }]
+        : [],
     });
     setLoading(false);
     if ("error" in result) {
       Alert.alert("Could not publish", result.error);
       return;
     }
+    if (wasFirstReview) {
+      router.replace({ pathname: "/taste-unlocked", params: { restaurantId: result.restaurantId } });
+      return;
+    }
     router.replace(`/restaurant/${result.restaurantId}`);
   };
 
-  return (
-    <ScrollView className="flex-1 bg-savr-50 dark:bg-savr-950" contentContainerClassName="px-4 pb-8 gap-4" keyboardShouldPersistTaps="handled">
-      <Text className="text-lg font-semibold text-savr-900 dark:text-savr-100">
-        {isEditMode ? "Edit your review" : "Where did you eat?"}
-      </Text>
+  const next = () => setStep((s) => Math.min(STEPS.length, s + 1));
+  const back = () => setStep((s) => Math.max(1, s - 1));
 
-      {!hasSelection && !isEditMode ? (
-        <PlaceSearch coords={coords} onSelect={handleSelectPlace} placeholder="Search by name, neighborhood, or city..." autoFocus />
-      ) : (
+  if (isEditMode) {
+    return (
+      <ScrollView className={`flex-1 ${ui.screen}`} contentContainerClassName="px-4 pb-8 gap-4" keyboardShouldPersistTaps="handled">
+        <Text className={`text-lg font-semibold ${ui.text.primary}`}>Edit your review</Text>
         <Card className="gap-2">
-          <View className="flex-row justify-between items-start">
-            <View className="flex-1">
-              <Text className="font-semibold text-lg text-savr-900 dark:text-savr-100">
-                {selectedRestaurant?.name ?? selectedPlace?.name}
-              </Text>
-              <Text className="text-sm text-savr-500 dark:text-savr-400">
-                {selectedRestaurant?.cuisine ?? selectedPlace?.cuisine} · {selectedRestaurant?.city ?? selectedPlace?.city}
-              </Text>
-              <Text className="text-xs text-savr-400 mt-1" numberOfLines={2}>
-                {selectedRestaurant?.address ?? selectedPlace?.address}
-              </Text>
-            </View>
-            {!isEditMode && (
-              <Pressable onPress={() => { setSelectedPlace(null); setSelectedRestaurantId(null); }} className="p-2">
-                <Ionicons name="close-circle" size={24} color="#B8956F" />
-              </Pressable>
-            )}
-          </View>
+          <Text className={`font-semibold text-lg ${ui.text.primary}`}>{selectedRestaurant?.name}</Text>
         </Card>
+        <Text className={`text-sm font-medium ${ui.text.secondary}`}>Your rating: {rating.toFixed(1)}</Text>
+        <View className="flex-row items-center gap-4">
+          <Pressable onPress={() => setRating(Math.max(1, rating - 0.1))} className={`w-12 h-12 rounded-xl items-center justify-center ${ui.surface.muted}`}>
+            <Text className={`text-xl ${ui.text.primary}`}>−</Text>
+          </Pressable>
+          <Rating value={rating} size="lg" />
+          <Pressable onPress={() => setRating(Math.min(10, rating + 0.1))} className={`w-12 h-12 rounded-xl items-center justify-center ${ui.surface.muted}`}>
+            <Text className={`text-xl ${ui.text.primary}`}>+</Text>
+          </Pressable>
+        </View>
+        <Input label="Review" value={text} onChangeText={setText} multiline numberOfLines={4} placeholder="What did you think?" />
+        <VisitDatePicker value={visitDate} onChange={setVisitDate} />
+        <View className="flex-row flex-wrap gap-2">
+          {REVIEW_TAGS.map((t) => (
+            <Tag key={t} label={t} active={tags.includes(t)} onPress={() => setTags((prev) => prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t])} />
+          ))}
+        </View>
+        <Button label="Save Changes" onPress={submit} loading={loading} />
+      </ScrollView>
+    );
+  }
+
+  return (
+    <ScrollView className={`flex-1 ${ui.screen}`} contentContainerClassName="px-4 pb-8 gap-5" keyboardShouldPersistTaps="handled">
+      <StepProgress step={step} total={STEPS.length} labels={STEPS} />
+
+      {step === 1 && (
+        <View className="gap-4">
+          <Text className={`text-2xl font-bold ${ui.text.primary}`}>Where did you eat?</Text>
+          {!hasSelection ? (
+            <PlaceSearch coords={coords} onSelect={handleSelectPlace} placeholder="Search restaurants..." autoFocus />
+          ) : (
+            <Card className="gap-2">
+              <View className="flex-row justify-between items-start">
+                <View className="flex-1">
+                  <Text className={`font-semibold text-lg ${ui.text.primary}`}>
+                    {selectedRestaurant?.name ?? selectedPlace?.name}
+                  </Text>
+                  <Text className={`text-sm ${ui.text.muted}`}>
+                    {selectedRestaurant?.cuisine ?? selectedPlace?.cuisine} · {selectedRestaurant?.city ?? selectedPlace?.city}
+                  </Text>
+                </View>
+                <Pressable onPress={() => { setSelectedPlace(null); setSelectedRestaurantId(null); }} className="p-2">
+                  <Ionicons name="close-circle" size={24} color="#B8956F" />
+                </Pressable>
+              </View>
+            </Card>
+          )}
+          <Button label="Continue" onPress={() => (hasSelection ? next() : Alert.alert("Pick a restaurant", "Search and select a spot first."))} />
+        </View>
       )}
 
-      {(hasSelection || isEditMode) && (
-        <>
-          <Text className="text-sm font-medium text-savr-800 dark:text-savr-200">Your rating: {rating.toFixed(1)}</Text>
-          <View className="flex-row items-center gap-4">
-            <Pressable onPress={() => setRating(Math.max(1, rating - 0.1))} className="bg-savr-100 dark:bg-savr-800 w-12 h-12 rounded-xl items-center justify-center"><Text className="text-xl text-savr-900 dark:text-savr-100">−</Text></Pressable>
-            <Text className="text-2xl font-bold text-savr-700 dark:text-savr-200 flex-1 text-center">{rating.toFixed(1)}</Text>
-            <Pressable onPress={() => setRating(Math.min(10, rating + 0.1))} className="bg-savr-100 dark:bg-savr-800 w-12 h-12 rounded-xl items-center justify-center"><Text className="text-xl text-savr-900 dark:text-savr-100">+</Text></Pressable>
-          </View>
-          <Input label="Review" value={text} onChangeText={setText} multiline numberOfLines={4} placeholder="What did you think?" />
-          <Input label="Visit Date" value={visitDate} onChangeText={setVisitDate} placeholder="YYYY-MM-DD" />
-          <Text className="text-sm font-medium text-savr-800 dark:text-savr-200">Tags</Text>
-          <View className="flex-row flex-wrap gap-2">{REVIEW_TAGS.map((t) => <Tag key={t} label={t} active={tags.includes(t)} onPress={() => setTags((prev) => prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t])} />)}</View>
-
-          {!isEditMode && (
-            <>
-              <Pressable onPress={pickPhoto} className="border border-dashed border-savr-300 dark:border-savr-600 rounded-xl p-6 items-center">
-                <Ionicons name="camera" size={28} color="#A85D3F" />
-                <Text className="text-savr-600 dark:text-savr-400 mt-2">Add photos</Text>
+      {step === 2 && (
+        <View className="gap-5">
+          <Text className={`text-2xl font-bold ${ui.text.primary}`}>Overall rating</Text>
+          <View className="items-center gap-4 py-4">
+            <Text className="text-5xl font-black text-savr-700 dark:text-savr-200">{rating.toFixed(1)}</Text>
+            <View className="flex-row items-center gap-6">
+              <Pressable onPress={() => setRating(Math.max(1, rating - 0.1))} className={`w-14 h-14 rounded-2xl items-center justify-center ${ui.surface.muted}`}>
+                <Text className={`text-2xl ${ui.text.primary}`}>−</Text>
               </Pressable>
-              {photos.map((uri, i) => <Image key={i} source={{ uri }} className="w-full h-40 rounded-xl" resizeMode="cover" />)}
-              <Text className="font-semibold text-savr-900 dark:text-savr-100">Dishes (optional)</Text>
-              {dishes.map((d, i) => (
-                <Card key={i} className="gap-2">
-                  <Input value={d.name} onChangeText={(v) => setDishes((ds) => ds.map((x, j) => j === i ? { ...x, name: v } : x))} placeholder="Dish name" />
-                  <Input value={d.notes} onChangeText={(v) => setDishes((ds) => ds.map((x, j) => j === i ? { ...x, notes: v } : x))} placeholder="Notes" />
-                  <Pressable onPress={() => setDishes((ds) => ds.map((x, j) => ({ ...x, isBestDish: j === i ? !x.isBestDish : false })))} className="flex-row items-center gap-2">
-                    <Ionicons name={d.isBestDish ? "trophy" : "trophy-outline"} size={20} color="#A85D3F" />
-                    <Text className="text-sm text-savr-600 dark:text-savr-400">Best dish of the meal</Text>
-                  </Pressable>
-                </Card>
-              ))}
-              <Button label="Add Another Dish" variant="secondary" onPress={() => setDishes((d) => [...d, { name: "", rating: 8, notes: "", isBestDish: false }])} />
-            </>
-          )}
+              <Pressable onPress={() => setRating(Math.min(10, rating + 0.1))} className={`w-14 h-14 rounded-2xl items-center justify-center ${ui.surface.muted}`}>
+                <Text className={`text-2xl ${ui.text.primary}`}>+</Text>
+              </Pressable>
+            </View>
+          </View>
+          <View className="flex-row gap-3">
+            <Button label="Back" variant="secondary" onPress={back} className="flex-1" />
+            <Button label="Continue" onPress={next} className="flex-1" />
+          </View>
+        </View>
+      )}
 
-          <Button label={isEditMode ? "Save Changes" : "Publish Review"} onPress={submit} loading={loading} />
-        </>
+      {step === 3 && (
+        <View className="gap-4">
+          <Text className={`text-2xl font-bold ${ui.text.primary}`}>Favorite dish</Text>
+          <Text className={`text-sm ${ui.text.secondary}`}>What was the standout plate?</Text>
+          <Input
+            value={dishes[0].name}
+            onChangeText={(v) => setDishes([{ ...dishes[0], name: v }])}
+            placeholder="e.g. Jerk chicken, omakase, margherita..."
+          />
+          <Input
+            value={dishes[0].notes}
+            onChangeText={(v) => setDishes([{ ...dishes[0], notes: v }])}
+            placeholder="Quick note (optional)"
+          />
+          <View className="flex-row gap-3">
+            <Button label="Back" variant="secondary" onPress={back} className="flex-1" />
+            <Button label="Continue" onPress={next} className="flex-1" />
+          </View>
+        </View>
+      )}
+
+      {step === 4 && (
+        <View className="gap-4">
+          <Text className={`text-2xl font-bold ${ui.text.primary}`}>Add photos</Text>
+          <Pressable onPress={pickPhoto} className="border border-dashed border-savr-300 dark:border-savr-600 rounded-2xl p-8 items-center">
+            <Ionicons name="camera" size={32} color="#A85D3F" />
+            <Text className={`mt-2 ${ui.text.secondary}`}>Tap to add photos</Text>
+          </Pressable>
+          {photos.map((uri, i) => (
+            <Image key={i} source={{ uri }} className="w-full h-48 rounded-2xl" resizeMode="cover" />
+          ))}
+          <View className="flex-row gap-3">
+            <Button label="Back" variant="secondary" onPress={back} className="flex-1" />
+            <Button label={photos.length ? "Continue" : "Skip"} onPress={next} className="flex-1" />
+          </View>
+        </View>
+      )}
+
+      {step === 5 && (
+        <View className="gap-4">
+          <Text className={`text-2xl font-bold ${ui.text.primary}`}>Tags</Text>
+          <Text className={`text-sm ${ui.text.secondary}`}>What stood out about this visit?</Text>
+          <View className="flex-row flex-wrap gap-2">
+            {REVIEW_TAGS.map((t) => (
+              <Tag key={t} label={t} active={tags.includes(t)} onPress={() => setTags((prev) => prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t])} />
+            ))}
+          </View>
+          <View className="flex-row gap-3">
+            <Button label="Back" variant="secondary" onPress={back} className="flex-1" />
+            <Button label="Continue" onPress={next} className="flex-1" />
+          </View>
+        </View>
+      )}
+
+      {step === 6 && (
+        <View className="gap-4">
+          <Text className={`text-2xl font-bold ${ui.text.primary}`}>Short review</Text>
+          <Input label="Your thoughts" value={text} onChangeText={setText} multiline numberOfLines={4} placeholder="What made this visit memorable?" maxLength={MAX_REVIEW_TEXT} />
+          <VisitDatePicker value={visitDate} onChange={setVisitDate} />
+          <View className="flex-row gap-3">
+            <Button label="Back" variant="secondary" onPress={back} className="flex-1" />
+            <Button label="Publish Review" onPress={submit} loading={loading} className="flex-1" />
+          </View>
+        </View>
       )}
     </ScrollView>
   );

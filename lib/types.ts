@@ -8,16 +8,28 @@ export type ReviewTag =
   | "Worth the Wait"
   | "Overrated"
   | "Great Service"
-  | "Bad Service";
+  | "Bad Service"
+  | "Must Try"
+  | "Great Value"
+  | "Worth Traveling For"
+  | "Best Service"
+  | "Family Friendly"
+  | "Solo Dining";
 
 export const REVIEW_TAGS: ReviewTag[] = [
   "Date Night",
   "Casual",
   "Hidden Gem",
   "Vegan Friendly",
+  "Must Try",
+  "Great Value",
+  "Worth Traveling For",
+  "Best Service",
+  "Family Friendly",
+  "Solo Dining",
   "Worth the Wait",
-  "Overrated",
   "Great Service",
+  "Overrated",
   "Bad Service",
 ];
 
@@ -179,10 +191,30 @@ export interface TasteDNA {
   preferredPriceLevel: PriceLevel | null;
   adventureScore: number;
   hiddenGemScore: number;
+  luxuryScore: number;
   dateNightScore: number;
   veganFriendlyScore: number;
   topDishes: Dish[];
   topRestaurants: { restaurant: Restaurant; rating: number }[];
+}
+
+/** Full Taste DNA output used by core engine + hooks. */
+export interface CoreTasteDna {
+  taste_label: string;
+  top_cuisine: Cuisine | string;
+  average_rating: number;
+  total_reviews: number;
+  total_dishes: number;
+  cuisines_tried: number;
+  preferred_price_level: PriceLevel | null;
+  adventure_score: number;
+  hidden_gem_score: number;
+  date_night_score: number;
+  vegan_score: number;
+  top_restaurants: { restaurant: Restaurant; rating: number }[];
+  top_dishes: Dish[];
+  /** Backward-compatible UI shape */
+  legacy: TasteDNA;
 }
 
 export interface Recommendation {
