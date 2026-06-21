@@ -51,3 +51,4 @@ export function getCompareRankings(
 
   return { mine, theirs, shared };
 }
+

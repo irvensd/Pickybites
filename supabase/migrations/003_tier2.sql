@@ -32,3 +32,4 @@ CREATE POLICY "bookmarks_insert_own" ON bookmarks
 DROP POLICY IF EXISTS "bookmarks_delete_own" ON bookmarks;
 CREATE POLICY "bookmarks_delete_own" ON bookmarks
   FOR DELETE TO authenticated USING (auth.uid() = user_id);
+

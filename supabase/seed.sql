@@ -24,3 +24,4 @@ BEGIN
   ('Ramen Lab', '404 Valencia St', 'San Francisco', 'Japanese', 2, 'https://images.unsplash.com/photo-1569718212165-3a8278dfe5bf?w=800&q=80'),
     ('Tapas y Vino', '18 La Rambla', 'Miami', 'Spanish', 3, 'https://images.unsplash.com/photo-1515443961218-a51367888e4b?w=800&q=80');
 END $$;
+

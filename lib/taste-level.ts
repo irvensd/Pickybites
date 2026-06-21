@@ -4,3 +4,4 @@ export function calculateTasteLevel(reviewCount: number, restaurantCount: number
   const variety = Math.floor(cuisineCount / 3);
   return Math.max(1, base + breadth + variety);
 }
+

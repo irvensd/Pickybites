@@ -178,3 +178,4 @@ export function regionToSearchRadius(region: {
   const radius = Math.max(latMeters, lngMeters);
   return Math.min(Math.max(Math.round(radius), 500), MAX_DISCOVER_RADIUS_METERS);
 }
+

@@ -25,3 +25,4 @@ export function useFoodJournal() {
     emptyMessage: FOOD_JOURNAL_EMPTY,
   };
 }
+

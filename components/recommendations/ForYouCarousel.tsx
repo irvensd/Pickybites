@@ -73,3 +73,4 @@ export function ForYouCarousel({ recommendations }: { recommendations: Recommend
     </View>
   );
 }
+

@@ -34,3 +34,4 @@ CREATE POLICY "notifications_insert" ON notifications
 
 -- Enable live notification delivery in the app (Supabase Dashboard → Database → Replication also works)
 ALTER PUBLICATION supabase_realtime ADD TABLE notifications;
+

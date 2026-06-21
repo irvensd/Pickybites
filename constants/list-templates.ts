@@ -24,3 +24,4 @@ export const LIST_TEMPLATES = [
     emoji: "✈️",
   },
 ] as const;
+

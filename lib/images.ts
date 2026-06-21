@@ -26,3 +26,4 @@ export function cuisineImage(cuisine: string): string {
   const key = cuisine.toLowerCase() as keyof typeof FOOD_IMAGES;
   return FOOD_IMAGES[key] ?? FOOD_IMAGES.american;
 }
+

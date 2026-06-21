@@ -22,3 +22,4 @@ export function StepProgress({ step, total, labels }: { step: number; total: num
     </View>
   );
 }
+

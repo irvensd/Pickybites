@@ -19,3 +19,4 @@ export function RestaurantTagRow({ tags }: { tags: RestaurantCommunityTag[] }) {
     </View>
   );
 }
+

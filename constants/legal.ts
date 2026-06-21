@@ -57,3 +57,4 @@ export const TERMS_SECTIONS = [
     body: `Questions? Email ${SUPPORT_EMAIL}.`,
   },
 ];
+

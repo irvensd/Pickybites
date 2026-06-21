@@ -84,3 +84,4 @@ export function MonthlyRecapCard({ stats }: { stats: MonthStats }) {
     </FadeInView>
   );
 }
+

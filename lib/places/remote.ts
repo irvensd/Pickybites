@@ -75,3 +75,4 @@ export async function fetchDetailsRemote(googlePlaceId: string): Promise<{ photo
   const data = await invokePlaces({ action: "details", googlePlaceId });
   return { photos: data.photos ?? [], openNow: data.openNow ?? null };
 }
+

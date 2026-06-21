@@ -37,3 +37,4 @@ export function distanceMeters(a: Coordinates, b: Coordinates): number {
     Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
 }
+

@@ -15,3 +15,4 @@ export function cardShadow(isDark: boolean): ViewStyle {
     default: {},
   }) as ViewStyle;
 }
+

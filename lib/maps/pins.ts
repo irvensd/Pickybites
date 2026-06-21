@@ -50,3 +50,4 @@ export function buildMapPins(restaurants: Restaurant[], nearbyPlaces: PlaceResul
 
 /** Large marker batches can crash react-native-maps on device builds. */
 export const MAX_MAP_MARKERS = 25;
+

@@ -64,3 +64,4 @@ export async function openInMaps(latitude: number, longitude: number, label?: st
   });
   if (url) await Linking.openURL(url);
 }
+

@@ -15,3 +15,4 @@ export async function initMonitoring() {
 export function isMonitoringEnabled(): boolean {
   return initialized;
 }
+

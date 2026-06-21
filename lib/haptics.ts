@@ -20,3 +20,4 @@ export async function hapticSelection() {
   if (Platform.OS === "web") return;
   await Haptics.selectionAsync();
 }
+

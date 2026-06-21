@@ -42,3 +42,4 @@ export function getRestaurantCommunityTags(
 
   return [...new Set(tags)].slice(0, limit);
 }
+

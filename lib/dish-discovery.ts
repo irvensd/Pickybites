@@ -73,3 +73,4 @@ function reviewCountLabel(n: number) {
   if (n === 1) return "Community favorite";
   return `${n} foodies rated this`;
 }
+

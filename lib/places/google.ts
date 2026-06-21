@@ -171,3 +171,4 @@ export async function fetchPlaceDetails(googlePlaceId: string): Promise<{
 
   return { photos, openNow: data.currentOpeningHours?.openNow ?? null };
 }
+

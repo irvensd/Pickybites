@@ -174,3 +174,4 @@ export async function addDishDb(
   if (error) throw new Error(error.message);
   return mapDish(data);
 }
+

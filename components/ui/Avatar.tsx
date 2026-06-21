@@ -24,3 +24,4 @@ export function Avatar({ name, src, size = "md" }: { name: string; src?: string 
     </View>
   );
 }
+

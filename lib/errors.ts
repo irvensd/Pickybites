@@ -10,3 +10,4 @@ export function friendlyError(error: unknown, fallback: string): string {
   }
   return error.message || fallback;
 }
+

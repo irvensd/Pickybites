@@ -49,3 +49,4 @@ export function showLocalNotification(title: string, body: string) {
     trigger: null,
   });
 }
+

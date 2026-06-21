@@ -48,3 +48,4 @@ export function DishPickCarousel({ picks }: { picks: DishDiscovery[] }) {
     </ScrollView>
   );
 }
+

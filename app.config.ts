@@ -15,3 +15,4 @@ export default (): ExpoConfig => ({
     ...(googleMapsKey ? { config: { googleMaps: { apiKey: googleMapsKey } } } : {}),
   },
 });
+

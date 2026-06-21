@@ -80,3 +80,4 @@ export function cityFromAddress(address: string): string {
   if (parts.length >= 2) return parts[parts.length - 2] ?? "";
   return parts[0] ?? "";
 }
+

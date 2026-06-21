@@ -42,3 +42,4 @@ CREATE POLICY "list_items_delete_collab" ON list_items FOR DELETE TO authenticat
     EXISTS (SELECT 1 FROM lists l WHERE l.id = list_id AND l.user_id = auth.uid())
     OR EXISTS (SELECT 1 FROM list_collaborators lc WHERE lc.list_id = list_id AND lc.user_id = auth.uid())
   );
+

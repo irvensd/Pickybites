@@ -22,3 +22,4 @@ export function DishCard({ dish, restaurant }: { dish: Dish; restaurant: Restaur
     </Pressable>
   );
 }
+

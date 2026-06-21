@@ -53,3 +53,4 @@ export async function uploadAvatar(userId: string, localUri: string): Promise<st
 
   return getPublicStorageUrl("avatars", path);
 }
+

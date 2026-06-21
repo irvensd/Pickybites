@@ -34,3 +34,4 @@ export function getSupabase(): SupabaseClient | null {
 export function getPublicStorageUrl(bucket: string, path: string): string {
   return `${supabaseUrl}/storage/v1/object/public/${bucket}/${path}`;
 }
+

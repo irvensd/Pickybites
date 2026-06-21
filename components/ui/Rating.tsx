@@ -15,3 +15,4 @@ export function Rating({ value, size = "md" }: { value: number; size?: "sm" | "m
     </View>
   );
 }
+

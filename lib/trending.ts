@@ -79,3 +79,4 @@ export function getHighestRatedThisWeek(
     .sort((a, b) => (b.avgRating ?? 0) - (a.avgRating ?? 0))
     .slice(0, limit);
 }
+

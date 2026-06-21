@@ -1,2 +1,3 @@
 [functions.places]
 verify_jwt = true
+
