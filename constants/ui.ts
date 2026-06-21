@@ -1,3 +1,5 @@
+import { brandColors } from "./branding";
+
 /** Shared NativeWind class strings for consistent light/dark styling */
 export const ui = {
   screen: "bg-savr-50 dark:bg-savr-950",
@@ -24,10 +26,10 @@ export const ui = {
 } as const;
 
 export const iconColors = {
-  brand: "#A85D3F",
-  brandDark: "#E09A7A",
-  muted: "#D4C4B5",
-  mutedDark: "#9A8470",
-  star: "#C4785A",
-  starDark: "#E8A88C",
+  brand: brandColors.roseDark,
+  brandDark: brandColors.roseLight,
+  muted: brandColors.greyLight,
+  mutedDark: brandColors.grey,
+  star: brandColors.rose,
+  starDark: brandColors.roseLight,
 } as const;

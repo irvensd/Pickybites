@@ -1,10 +1,16 @@
-import type { Cuisine, PriceLevel, ReviewTag } from "./types";
+import type { Cuisine, PriceLevel, ReviewCategoryScores, ReviewTag, WaitTime } from "./types";
+import { validateCategoryScores } from "./review-scores";
 
 export type ReviewSubmitPayload = {
   restaurantName?: string;
   restaurantId?: string;
   placeName?: string;
   rating: number;
+  categoryScores: ReviewCategoryScores;
+  ratingManualOverride?: boolean;
+  waitTime?: WaitTime | null;
+  wouldReturn?: boolean | null;
+  wouldRecommend?: boolean | null;
   text: string;
   visitDate: string;
   cuisine?: Cuisine;
@@ -27,6 +33,11 @@ export function validateReviewSubmit(data: ReviewSubmitPayload): ReviewValidatio
 
   if (!hasRestaurant) {
     return { ok: false, error: "Restaurant name is required." };
+  }
+
+  const categoryError = validateCategoryScores(data.categoryScores);
+  if (categoryError) {
+    return { ok: false, error: categoryError };
   }
 
   if (!Number.isFinite(data.rating) || data.rating < 1 || data.rating > 10) {

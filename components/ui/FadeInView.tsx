@@ -1,5 +1,5 @@
 import type { ViewProps } from "react-native";
-import Animated, { FadeInDown, FadeIn } from "react-native-reanimated";
+import { View } from "react-native";
 
 type FadeInViewProps = ViewProps & {
   delay?: number;
@@ -7,12 +7,7 @@ type FadeInViewProps = ViewProps & {
   children: React.ReactNode;
 };
 
-export function FadeInView({ delay = 0, direction = "up", children, ...props }: FadeInViewProps) {
-  const entering = direction === "up" ? FadeInDown.delay(delay).duration(420) : FadeIn.delay(delay).duration(420);
-
-  return (
-    <Animated.View entering={entering} {...props}>
-      {children}
-    </Animated.View>
-  );
+/** Plain wrapper — Reanimated entering animations were causing update loops on some devices. */
+export function FadeInView({ children, ...props }: FadeInViewProps) {
+  return <View {...props}>{children}</View>;
 }

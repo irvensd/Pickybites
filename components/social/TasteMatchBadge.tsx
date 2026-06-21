@@ -1,12 +1,17 @@
 import { View, Text } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { ui } from "@/constants/ui";
+import { cn } from "@/lib/utils";
 
 export function TasteMatchBadge({
   percent,
   detail,
+  explanations = [],
   size = "md",
 }: {
   percent: number;
   detail?: string;
+  explanations?: string[];
   size?: "sm" | "md" | "lg";
 }) {
   if (percent <= 0) return null;
@@ -21,16 +26,38 @@ export function TasteMatchBadge({
     percent >= 60 ? "text-savr-800 dark:text-savr-200" :
     "text-amber-800 dark:text-amber-200";
 
-  const textSize = size === "lg" ? "text-base" : size === "md" ? "text-sm" : "text-xs";
-  const percentSize = size === "lg" ? "text-2xl" : size === "md" ? "text-lg" : "text-sm";
+  const percentSize = size === "lg" ? "text-3xl" : size === "md" ? "text-xl" : "text-base";
+  const labelSize = size === "lg" ? "text-base" : size === "md" ? "text-sm" : "text-xs";
+  const showExplanations = size !== "sm" && explanations.length > 0;
 
   return (
-    <View className={`${color} px-4 py-2 rounded-2xl items-center`}>
-      <View className="flex-row items-baseline gap-1">
-        <Text className={`${percentSize} font-bold ${textColor}`}>{percent}%</Text>
-        <Text className={`${textSize} ${textColor}`}>taste match</Text>
+    <View className={cn(color, "px-4 py-3 rounded-2xl gap-2", size === "lg" ? "items-center" : "")}>
+      <View className="flex-row items-center gap-2">
+        <Ionicons
+          name="heart"
+          size={size === "lg" ? 20 : 16}
+          color={percent >= 80 ? "#059669" : percent >= 60 ? "#A85D3F" : "#D97706"}
+        />
+        <View className="flex-row items-baseline gap-1.5">
+          <Text className={cn(percentSize, "font-black", textColor)}>{percent}%</Text>
+          <Text className={cn(labelSize, "font-semibold", textColor)}>Taste Match</Text>
+        </View>
       </View>
-      {detail ? <Text className={`text-xs ${textColor} opacity-80 mt-0.5`}>{detail}</Text> : null}
+
+      {showExplanations ? (
+        <View className={cn("gap-1", size === "lg" ? "items-center" : "")}>
+          {explanations.map((line) => (
+            <Text
+              key={line}
+              className={cn("text-xs leading-5", textColor, "opacity-90", size === "lg" && "text-center")}
+            >
+              {line}
+            </Text>
+          ))}
+        </View>
+      ) : detail ? (
+        <Text className={cn("text-xs", textColor, "opacity-80")}>{detail}</Text>
+      ) : null}
     </View>
   );
 }

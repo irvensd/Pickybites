@@ -12,7 +12,6 @@ import { getCommunityRating, getRestaurantCommunityTags } from "@/lib/restaurant
 import { hapticLight } from "@/lib/haptics";
 import { useThemedColors } from "@/lib/useThemedColors";
 import { ui } from "@/constants/ui";
-import { FadeInView } from "@/components/ui/FadeInView";
 
 export const RestaurantCard = memo(function RestaurantCard({
   restaurant,
@@ -39,8 +38,7 @@ export const RestaurantCard = memo(function RestaurantCard({
   const tags = getRestaurantCommunityTags(restaurant, reviews, bookmarks, userCity);
 
   return (
-    <FadeInView delay={index * 60}>
-      <Pressable onPress={() => { hapticLight(); router.push(`/restaurant/${restaurant.id}`); }}>
+    <Pressable onPress={() => { hapticLight(); router.push(`/restaurant/${restaurant.id}`); }}>
         <Card className="p-0 overflow-hidden">
           {restaurant.imageUrl ? (
             <Image
@@ -90,6 +88,5 @@ export const RestaurantCard = memo(function RestaurantCard({
           </View>
         </Card>
       </Pressable>
-    </FadeInView>
   );
 });

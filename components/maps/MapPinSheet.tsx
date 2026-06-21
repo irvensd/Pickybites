@@ -1,6 +1,8 @@
 import { View, Text, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Button } from "@/components/ui/Button";
+import { APP_NAME } from "@/constants/branding";
+import { iconColors } from "@/constants/ui";
 import type { MapPinType } from "@/lib/maps/pins";
 
 export function MapPinSheet({
@@ -43,10 +45,10 @@ export function MapPinSheet({
           <View className="flex-row items-center gap-2">
             <View
               className="w-2.5 h-2.5 rounded-full"
-              style={{ backgroundColor: type === "rated" ? "#A85D3F" : "#B8956F" }}
+              style={{ backgroundColor: type === "rated" ? iconColors.brand : iconColors.muted }}
             />
             <Text className="text-xs text-savr-500 dark:text-savr-400 uppercase">
-              {type === "rated" ? "Rated on ForkLoop" : "Nearby"}
+              {type === "rated" ? `Rated on ${APP_NAME}` : "Nearby"}
             </Text>
           </View>
           <Text className="text-xl font-bold text-savr-900 dark:text-savr-100 mt-1">{title}</Text>
@@ -64,7 +66,7 @@ export function MapPinSheet({
             onPress={onBookmark}
             className="w-12 h-12 rounded-xl bg-savr-100 dark:bg-savr-800 items-center justify-center"
           >
-            <Ionicons name={isBookmarked ? "bookmark" : "bookmark-outline"} size={22} color="#A85D3F" />
+            <Ionicons name={isBookmarked ? "bookmark" : "bookmark-outline"} size={22} color={iconColors.brand} />
           </Pressable>
         )}
         {onAddToList && (
@@ -72,7 +74,7 @@ export function MapPinSheet({
             onPress={onAddToList}
             className="w-12 h-12 rounded-xl bg-savr-100 dark:bg-savr-800 items-center justify-center"
           >
-            <Ionicons name="list-outline" size={22} color="#A85D3F" />
+            <Ionicons name="list-outline" size={22} color={iconColors.brand} />
           </Pressable>
         )}
       </View>

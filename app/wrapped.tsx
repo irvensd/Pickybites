@@ -1,102 +1,214 @@
-import { useRef } from "react";
-import { View, Text, ScrollView, Share, Alert } from "react-native";
+import { useRef, useState, useMemo, useCallback } from "react";
+import {
+  View,
+  Text,
+  FlatList,
+  Dimensions,
+  Share,
+  Alert,
+  Pressable,
+  type NativeSyntheticEvent,
+  type NativeScrollEvent,
+} from "react-native";
 import { captureRef } from "react-native-view-shot";
-import { useAppStore } from "@/store/useAppStore";
-import { calculateFoodWrapped } from "@/lib/taste-dna";
-import { Card } from "@/components/ui/Card";
-import { Rating } from "@/components/ui/Rating";
-import { Button } from "@/components/ui/Button";
-import { WrappedShareCard } from "@/components/wrapped/WrappedShareCard";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { router } from "expo-router";
+import { goBackOr } from "@/lib/navigation";
 import { Ionicons } from "@expo/vector-icons";
-import { APP_NAME } from "@/constants/branding";
-import { ui } from "@/constants/ui";
+import { useAppStore } from "@/store/useAppStore";
+import {
+  calculateFoodWrappedSummary,
+  getDefaultWrappedPeriod,
+  buildWrappedShareMessage,
+  type WrappedPeriod,
+  type WrappedPeriodType,
+} from "@/lib/food-wrapped";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Button } from "@/components/ui/Button";
+import {
+  renderWrappedCard,
+  WRAPPED_CARD_COUNT,
+} from "@/components/wrapped/WrappedCards";
+import { WrappedShareCard } from "@/components/wrapped/WrappedShareCard";
+import { hapticLight } from "@/lib/haptics";
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+const CARD_HEIGHT = Math.min(SCREEN_HEIGHT * 0.72, 620);
 
 export default function WrappedScreen() {
   const { currentUserId, users, reviews, dishes, restaurants } = useAppStore();
-  const shareRef = useRef<View>(null);
-  const year = new Date().getFullYear();
   const user = users.find((u) => u.id === currentUserId);
-  const w = currentUserId ? calculateFoodWrapped(currentUserId, year, reviews, dishes, restaurants) : null;
+  const shareRef = useRef<View>(null);
+  const listRef = useRef<FlatList>(null);
 
-  if (!w || !user) return null;
+  const [periodType, setPeriodType] = useState<WrappedPeriodType>("year");
+  const [period, setPeriod] = useState<WrappedPeriod>(getDefaultWrappedPeriod());
+  const [activeIndex, setActiveIndex] = useState(0);
 
-  const yoy = w.priorYearRestaurants > 0 ? w.totalRestaurants - w.priorYearRestaurants : null;
+  const activePeriod = useMemo<WrappedPeriod>(
+    () => ({ ...period, type: periodType }),
+    [period, periodType],
+  );
 
-  const shareText = () =>
-    Share.share({
-      message: `My ${year} ${APP_NAME} Food Wrapped: ${w.totalRestaurants} restaurants, ${w.totalDishes} dishes!${yoy != null && yoy !== 0 ? ` (${yoy > 0 ? "+" : ""}${yoy} vs last year)` : ""}`,
-    });
+  const summary = useMemo(
+    () =>
+      currentUserId
+        ? calculateFoodWrappedSummary(currentUserId, activePeriod, reviews, dishes, restaurants)
+        : null,
+    [currentUserId, activePeriod, reviews, dishes, restaurants],
+  );
+
+  const onScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const index = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+    setActiveIndex(index);
+  }, []);
+
+  const shiftPeriod = (delta: number) => {
+    if (periodType === "all-time") return;
+    if (periodType === "year") {
+      setPeriod((p) => ({ ...p, year: p.year + delta }));
+      return;
+    }
+    const d = new Date(period.year, period.month - 1 + delta, 1);
+    setPeriod({ type: "month", year: d.getFullYear(), month: d.getMonth() + 1 });
+  };
+
+  const shareText = () => {
+    if (!summary || !user) return;
+    Share.share({ message: buildWrappedShareMessage(summary, user.displayName) });
+  };
 
   const shareImage = async () => {
+    if (!summary || !user) return;
     try {
       const uri = await captureRef(shareRef, { format: "png", quality: 1 });
-      await Share.share({ url: uri, message: `My ${year} ${APP_NAME} Wrapped` });
+      await Share.share({ url: uri, message: buildWrappedShareMessage(summary, user.displayName) });
     } catch {
       Alert.alert("Share", "Could not create share image. Sharing text instead.");
       shareText();
     }
   };
 
+  if (!user) return null;
+
   return (
-    <ScrollView className="flex-1 bg-savr-50 dark:bg-savr-950" contentContainerClassName="px-4 pb-8 gap-4">
-      <View className="items-center py-4">
-        <Ionicons name="gift" size={48} color="#A85D3F" />
-        <Text className="text-3xl font-bold text-savr-900 dark:text-savr-100 mt-2">{year}</Text>
-        <Text className="text-savr-600 dark:text-savr-400">Your year in food</Text>
-        {yoy != null && yoy !== 0 && (
-          <Text className="text-sm font-semibold text-savr-600 dark:text-savr-300 mt-2">
-            {yoy > 0 ? `+${yoy}` : yoy} restaurants vs {year - 1}
-          </Text>
-        )}
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#141010" }} edges={["top", "bottom"]}>
+      <View style={{ paddingHorizontal: 16, paddingTop: 8, gap: 12 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <Pressable onPress={() => goBackOr("/(tabs)/profile")} hitSlop={12}>
+            <Ionicons name="close" size={28} color="#F5F0EB" />
+          </Pressable>
+          <Text style={{ color: "#F5F0EB", fontSize: 16, fontWeight: "700" }}>Food Wrapped</Text>
+          <Pressable onPress={shareImage} hitSlop={12}>
+            <Ionicons name="share-outline" size={24} color="#F5F0EB" />
+          </Pressable>
+        </View>
+
+        <SegmentedControl
+          options={[
+            { value: "year" as const, label: "Year" },
+            { value: "month" as const, label: "Month" },
+            { value: "all-time" as const, label: "All Time" },
+          ]}
+          value={periodType}
+          onChange={(v) => {
+            hapticLight();
+            setPeriodType(v);
+            setActiveIndex(0);
+            listRef.current?.scrollToOffset({ offset: 0, animated: false });
+          }}
+        />
+
+        {periodType !== "all-time" ? (
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 20 }}>
+            <Pressable onPress={() => shiftPeriod(-1)}>
+              <Ionicons name="chevron-back" size={22} color="#F5F0EB" />
+            </Pressable>
+            <Text style={{ color: "#F5F0EB", fontSize: 15, fontWeight: "600", minWidth: 120, textAlign: "center" }}>
+              {summary?.periodLabel ?? activePeriod.year}
+            </Text>
+            <Pressable onPress={() => shiftPeriod(1)}>
+              <Ionicons name="chevron-forward" size={22} color="#F5F0EB" />
+            </Pressable>
+          </View>
+        ) : null}
       </View>
 
-      <View className="items-center opacity-0 absolute -left-[9999]">
-        <View ref={shareRef} collapsable={false}>
-          <WrappedShareCard data={w} displayName={user.displayName} />
+      {!summary ? (
+        <View style={{ flex: 1, justifyContent: "center", paddingHorizontal: 16 }}>
+          <EmptyState
+            icon="gift-outline"
+            title="No wrapped data yet"
+            description={`Log reviews for this ${periodType === "month" ? "month" : periodType === "year" ? "year" : "period"} to unlock your Food Wrapped.`}
+            actionLabel="Write a Review"
+            onAction={() => router.push("/add-review")}
+          />
         </View>
-      </View>
+      ) : (
+        <>
+          <FlatList
+            ref={listRef}
+            data={Array.from({ length: WRAPPED_CARD_COUNT }, (_, i) => i)}
+            keyExtractor={(item) => String(item)}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onScroll={onScroll}
+            scrollEventThrottle={16}
+            decelerationRate="fast"
+            snapToInterval={SCREEN_WIDTH}
+            getItemLayout={(_, index) => ({
+              length: SCREEN_WIDTH,
+              offset: SCREEN_WIDTH * index,
+              index,
+            })}
+            renderItem={({ item }) => (
+              <View
+                style={{
+                  width: SCREEN_WIDTH,
+                  height: CARD_HEIGHT,
+                  paddingHorizontal: 16,
+                  paddingVertical: 12,
+                }}
+              >
+                <View style={{ flex: 1, borderRadius: 28, overflow: "hidden" }}>
+                  {renderWrappedCard(item, summary, user.displayName)}
+                </View>
+              </View>
+            )}
+          />
 
-      <Card className="bg-savr-600 border-0">
-        <View className="flex-row justify-around py-2">
-          <View className="items-center"><Text className="text-4xl font-bold text-white">{w.totalRestaurants}</Text><Text className="text-sm text-savr-200">Restaurants</Text></View>
-          <View className="items-center"><Text className="text-4xl font-bold text-white">{w.totalDishes}</Text><Text className="text-sm text-savr-200">Dishes</Text></View>
+          <View style={{ alignItems: "center", gap: 12, paddingVertical: 16, paddingHorizontal: 16 }}>
+            <View style={{ flexDirection: "row", gap: 6 }}>
+              {Array.from({ length: WRAPPED_CARD_COUNT }).map((_, i) => (
+                <View
+                  key={i}
+                  style={{
+                    width: i === activeIndex ? 20 : 6,
+                    height: 6,
+                    borderRadius: 999,
+                    backgroundColor: i === activeIndex ? "#F5D0A8" : "rgba(255,255,255,0.25)",
+                  }}
+                />
+              ))}
+            </View>
+            <Text style={{ color: "rgba(255,255,255,0.5)", fontSize: 12 }}>
+              Swipe for your story · {activeIndex + 1}/{WRAPPED_CARD_COUNT}
+            </Text>
+            <Button label="Share Wrapped Card" onPress={shareImage} />
+            <Button label="Share as Text" variant="secondary" onPress={shareText} />
+          </View>
+        </>
+      )}
+
+      {summary ? (
+        <View style={{ position: "absolute", left: -9999, opacity: 0 }} pointerEvents="none">
+          <View ref={shareRef} collapsable={false}>
+            <WrappedShareCard summary={summary} displayName={user.displayName} />
+          </View>
         </View>
-      </Card>
-
-      {w.favoriteCuisine && <Card><Text className={`text-xs uppercase ${ui.text.muted}`}>Favorite Cuisine</Text><Text className={`text-xl font-bold ${ui.text.primary}`}>{w.favoriteCuisine}</Text></Card>}
-      {w.mostVisitedCity && <Card><Text className={`text-xs uppercase ${ui.text.muted}`}>Most Visited City</Text><Text className={`text-xl font-bold ${ui.text.primary}`}>{w.mostVisitedCity}</Text></Card>}
-      {w.highestRatedRestaurant && (
-        <Card>
-          <Text className={`text-xs uppercase ${ui.text.muted}`}>Top Restaurant</Text>
-          <Text className={`font-bold ${ui.text.primary}`}>{w.highestRatedRestaurant.restaurant.name}</Text>
-          <Rating value={w.highestRatedRestaurant.rating} size="sm" />
-        </Card>
-      )}
-      {w.highestRatedDish && (
-        <Card>
-          <Text className={`text-xs uppercase ${ui.text.muted}`}>Top Dish</Text>
-          <Text className={`font-bold ${ui.text.primary}`}>{w.highestRatedDish.dish.name}</Text>
-          <Text className={`text-sm ${ui.text.muted}`}>{w.highestRatedDish.restaurant.name}</Text>
-          <Rating value={w.highestRatedDish.dish.rating} size="sm" />
-        </Card>
-      )}
-      {w.biggestSurprise && (
-        <Card>
-          <Text className={`text-xs uppercase ${ui.text.muted}`}>Biggest Surprise</Text>
-          <Text className={`font-bold ${ui.text.primary}`}>{w.biggestSurprise.restaurant.name}</Text>
-          <Rating value={w.biggestSurprise.rating} size="sm" />
-        </Card>
-      )}
-      {w.biggestDisappointment && (
-        <Card>
-          <Text className={`text-xs uppercase ${ui.text.muted}`}>Biggest Disappointment</Text>
-          <Text className={`font-bold ${ui.text.primary}`}>{w.biggestDisappointment.restaurant.name}</Text>
-          <Rating value={w.biggestDisappointment.rating} size="sm" />
-        </Card>
-      )}
-
-      <Button label="Share Story Card" onPress={shareImage} />
-      <Button label="Share as Text" variant="secondary" onPress={shareText} />
-    </ScrollView>
+      ) : null}
+    </SafeAreaView>
   );
 }

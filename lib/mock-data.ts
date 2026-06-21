@@ -2,7 +2,22 @@ import type {
   Comment, Dish, Follow, Like, List, ListItem,
   Restaurant, Review, ReviewPhoto, User,
 } from "./types";
+import { scoresFromOverall } from "./review-scores";
 import { cuisineImage, FOOD_IMAGES } from "./images";
+
+function mockReview(
+  base: Omit<Review, "categoryScores" | "ratingManualOverride" | "waitTime" | "wouldReturn" | "wouldRecommend"> &
+    Partial<Pick<Review, "categoryScores" | "ratingManualOverride" | "waitTime" | "wouldReturn" | "wouldRecommend">>,
+): Review {
+  return {
+    ...base,
+    categoryScores: base.categoryScores ?? scoresFromOverall(base.rating),
+    ratingManualOverride: base.ratingManualOverride ?? false,
+    waitTime: base.waitTime ?? null,
+    wouldReturn: base.wouldReturn ?? null,
+    wouldRecommend: base.wouldRecommend ?? null,
+  };
+}
 
 export const DEMO_EMAIL = "alex@example.com";
 export const DEMO_PASSWORD = "Demo1234!";
@@ -35,23 +50,23 @@ export const MOCK_RESTAURANTS: Restaurant[] = [
 ];
 
 export const MOCK_REVIEWS: Review[] = [
-  { id: "rev-1", userId: "user-1", restaurantId: "rest-1", rating: 9.2, text: "Omakase was flawless. The uni nigiri melted on contact.", visitDate: "2025-11-12", tags: ["Date Night", "Worth the Wait", "Great Service"], createdAt: "2025-11-13T10:00:00Z" },
-  { id: "rev-2", userId: "user-1", restaurantId: "rest-3", rating: 8.7, text: "Best al pastor in the city. Pineapple hits different here.", visitDate: "2025-10-05", tags: ["Casual", "Hidden Gem"], createdAt: "2025-10-06T10:00:00Z" },
-  { id: "rev-3", userId: "user-2", restaurantId: "rest-2", rating: 8.5, text: "Cacio e pepe was silky. Cozy corner table vibes.", visitDate: "2025-09-20", tags: ["Casual", "Date Night"], createdAt: "2025-09-21T10:00:00Z" },
-  { id: "rev-4", userId: "user-3", restaurantId: "rest-4", rating: 9.5, text: "Butter chicken rewired my brain. Naan was pillowy perfection.", visitDate: "2025-11-01", tags: ["Hidden Gem", "Great Service"], createdAt: "2025-11-02T10:00:00Z" },
-  { id: "rev-5", userId: "user-4", restaurantId: "rest-5", rating: 9.8, text: "Best jerk chicken outside Jamaica. Smoky, spicy, unforgettable.", visitDate: "2025-12-01", tags: ["Hidden Gem", "Casual"], createdAt: "2025-12-02T10:00:00Z" },
-  { id: "rev-6", userId: "user-4", restaurantId: "rest-2", rating: 9.0, text: "Tiramisu is unreal. Worth the trip to Mulberry alone.", visitDate: "2025-11-18", tags: ["Date Night"], createdAt: "2025-11-19T10:00:00Z" },
-  { id: "rev-7", userId: "user-2", restaurantId: "rest-1", rating: 9.8, text: "Life-changing sushi. Chef's counter is the move.", visitDate: "2025-12-01", tags: ["Date Night", "Worth the Wait"], createdAt: "2025-12-02T10:00:00Z" },
-  { id: "rev-8", userId: "user-5", restaurantId: "rest-14", rating: 9.6, text: "Tonkotsu broth took 18 hours and it shows. Rich, creamy heaven.", visitDate: "2025-12-10", tags: ["Hidden Gem", "Worth the Wait"], createdAt: "2025-12-11T10:00:00Z" },
-  { id: "rev-9", userId: "user-6", restaurantId: "rest-7", rating: 8.9, text: "Drunken noodles with perfect wok hei. Spice level 4 was no joke.", visitDate: "2025-11-25", tags: ["Casual", "Hidden Gem"], createdAt: "2025-11-26T10:00:00Z" },
-  { id: "rev-10", userId: "user-3", restaurantId: "rest-8", rating: 9.1, text: "Bibimbap stone bowl crackled for minutes. Crispy rice bottom FTW.", visitDate: "2025-10-15", tags: ["Casual", "Great Service"], createdAt: "2025-10-16T10:00:00Z" },
-  { id: "rev-11", userId: "user-2", restaurantId: "rest-9", rating: 9.4, text: "Duck confit fell off the bone. Classic French done right.", visitDate: "2025-12-05", tags: ["Date Night", "Worth the Wait"], createdAt: "2025-12-06T10:00:00Z" },
-  { id: "rev-12", userId: "user-5", restaurantId: "rest-10", rating: 8.3, text: "Double smash patty with secret sauce. Messy in the best way.", visitDate: "2025-11-08", tags: ["Casual"], createdAt: "2025-11-09T10:00:00Z" },
-  { id: "rev-13", userId: "user-1", restaurantId: "rest-6", rating: 8.8, text: "Falafel wrap was crisp outside, herbaceous inside. Vegan-friendly win.", visitDate: "2025-12-15", tags: ["Vegan Friendly", "Casual"], createdAt: "2025-12-16T10:00:00Z" },
-  { id: "rev-14", userId: "user-6", restaurantId: "rest-12", rating: 9.0, text: "Pho broth simmered for 12 hours — you can taste every hour.", visitDate: "2025-12-08", tags: ["Hidden Gem", "Casual"], createdAt: "2025-12-09T10:00:00Z" },
-  { id: "rev-15", userId: "user-4", restaurantId: "rest-15", rating: 8.6, text: "Patatas bravas with aioli that could convert skeptics.", visitDate: "2025-11-30", tags: ["Date Night", "Great Service"], createdAt: "2025-12-01T09:00:00Z" },
-  { id: "rev-16", userId: "user-5", restaurantId: "rest-11", rating: 8.4, text: "Soup dumplings burst with hot broth. Order two baskets minimum.", visitDate: "2025-10-22", tags: ["Casual", "Hidden Gem"], createdAt: "2025-10-23T10:00:00Z" },
-  { id: "rev-17", userId: "user-3", restaurantId: "rest-13", rating: 8.2, text: "Lamb souvlaki with tzatziki so garlicky it haunted me (compliment).", visitDate: "2025-12-12", tags: ["Casual"], createdAt: "2025-12-13T10:00:00Z" },
+  mockReview({ id: "rev-1", userId: "user-1", restaurantId: "rest-1", rating: 9.2, text: "Omakase was flawless. The uni nigiri melted on contact.", visitDate: "2025-11-12", tags: ["Date Night", "Worth the Wait", "Great Service"], createdAt: "2025-11-13T10:00:00Z", categoryScores: { foodQuality: 9.8, service: 9.5, atmosphere: 9.0, value: 8.5 }, wouldReturn: true, wouldRecommend: true }),
+  mockReview({ id: "rev-2", userId: "user-1", restaurantId: "rest-3", rating: 8.7, text: "Best al pastor in the city. Pineapple hits different here.", visitDate: "2025-10-05", tags: ["Casual", "Hidden Gem"], createdAt: "2025-10-06T10:00:00Z" }),
+  mockReview({ id: "rev-3", userId: "user-2", restaurantId: "rest-2", rating: 8.5, text: "Cacio e pepe was silky. Cozy corner table vibes.", visitDate: "2025-09-20", tags: ["Casual", "Date Night"], createdAt: "2025-09-21T10:00:00Z" }),
+  mockReview({ id: "rev-4", userId: "user-3", restaurantId: "rest-4", rating: 9.5, text: "Butter chicken rewired my brain. Naan was pillowy perfection.", visitDate: "2025-11-01", tags: ["Hidden Gem", "Great Service"], createdAt: "2025-11-02T10:00:00Z" }),
+  mockReview({ id: "rev-5", userId: "user-4", restaurantId: "rest-5", rating: 9.8, text: "Best jerk chicken outside Jamaica. Smoky, spicy, unforgettable.", visitDate: "2025-12-01", tags: ["Hidden Gem", "Casual"], createdAt: "2025-12-02T10:00:00Z" }),
+  mockReview({ id: "rev-6", userId: "user-4", restaurantId: "rest-2", rating: 9.0, text: "Tiramisu is unreal. Worth the trip to Mulberry alone.", visitDate: "2025-11-18", tags: ["Date Night"], createdAt: "2025-11-19T10:00:00Z" }),
+  mockReview({ id: "rev-7", userId: "user-2", restaurantId: "rest-1", rating: 9.8, text: "Life-changing sushi. Chef's counter is the move.", visitDate: "2025-12-01", tags: ["Date Night", "Worth the Wait"], createdAt: "2025-12-02T10:00:00Z", waitTime: "30_60" }),
+  mockReview({ id: "rev-8", userId: "user-5", restaurantId: "rest-14", rating: 9.6, text: "Tonkotsu broth took 18 hours and it shows. Rich, creamy heaven.", visitDate: "2025-12-10", tags: ["Hidden Gem", "Worth the Wait"], createdAt: "2025-12-11T10:00:00Z" }),
+  mockReview({ id: "rev-9", userId: "user-6", restaurantId: "rest-7", rating: 8.9, text: "Drunken noodles with perfect wok hei. Spice level 4 was no joke.", visitDate: "2025-11-25", tags: ["Casual", "Hidden Gem"], createdAt: "2025-11-26T10:00:00Z" }),
+  mockReview({ id: "rev-10", userId: "user-3", restaurantId: "rest-8", rating: 9.1, text: "Bibimbap stone bowl crackled for minutes. Crispy rice bottom FTW.", visitDate: "2025-10-15", tags: ["Casual", "Great Service"], createdAt: "2025-10-16T10:00:00Z" }),
+  mockReview({ id: "rev-11", userId: "user-2", restaurantId: "rest-9", rating: 9.4, text: "Duck confit fell off the bone. Classic French done right.", visitDate: "2025-12-05", tags: ["Date Night", "Worth the Wait"], createdAt: "2025-12-06T10:00:00Z" }),
+  mockReview({ id: "rev-12", userId: "user-5", restaurantId: "rest-10", rating: 8.3, text: "Double smash patty with secret sauce. Messy in the best way.", visitDate: "2025-11-08", tags: ["Casual"], createdAt: "2025-11-09T10:00:00Z" }),
+  mockReview({ id: "rev-13", userId: "user-1", restaurantId: "rest-6", rating: 8.8, text: "Falafel wrap was crisp outside, herbaceous inside. Vegan-friendly win.", visitDate: "2025-12-15", tags: ["Vegan Friendly", "Casual"], createdAt: "2025-12-16T10:00:00Z" }),
+  mockReview({ id: "rev-14", userId: "user-6", restaurantId: "rest-12", rating: 9.0, text: "Pho broth simmered for 12 hours — you can taste every hour.", visitDate: "2025-12-08", tags: ["Hidden Gem", "Casual"], createdAt: "2025-12-09T10:00:00Z" }),
+  mockReview({ id: "rev-15", userId: "user-4", restaurantId: "rest-15", rating: 8.6, text: "Patatas bravas with aioli that could convert skeptics.", visitDate: "2025-11-30", tags: ["Date Night", "Great Service"], createdAt: "2025-12-01T09:00:00Z" }),
+  mockReview({ id: "rev-16", userId: "user-5", restaurantId: "rest-11", rating: 8.4, text: "Soup dumplings burst with hot broth. Order two baskets minimum.", visitDate: "2025-10-22", tags: ["Casual", "Hidden Gem"], createdAt: "2025-10-23T10:00:00Z" }),
+  mockReview({ id: "rev-17", userId: "user-3", restaurantId: "rest-13", rating: 8.2, text: "Lamb souvlaki with tzatziki so garlicky it haunted me (compliment).", visitDate: "2025-12-12", tags: ["Casual"], createdAt: "2025-12-13T10:00:00Z" }),
 ];
 
 export const MOCK_REVIEW_PHOTOS: ReviewPhoto[] = [

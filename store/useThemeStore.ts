@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { Appearance } from "react-native";
 import { colorScheme } from "nativewind";
+import { brandColors } from "@/constants/branding";
 import { loadThemeMode, saveThemeMode } from "@/lib/prefs";
 
 export type ThemeMode = "light" | "dark" | "system";
@@ -29,11 +30,11 @@ export const useThemeStore = create<ThemeState>((set, get) => {
   apply(initial);
 
   Appearance.addChangeListener(({ colorScheme: cs }) => {
-    if (get().mode === "system") {
-      const resolved = cs === "dark" ? "dark" : "light";
-      apply(resolved);
-      set({ resolved });
-    }
+    if (get().mode !== "system") return;
+    const resolved = cs === "dark" ? "dark" : "light";
+    if (get().resolved === resolved) return;
+    apply(resolved);
+    set({ resolved });
   });
 
   return {
@@ -42,6 +43,7 @@ export const useThemeStore = create<ThemeState>((set, get) => {
     hydrated: false,
     setMode: (mode) => {
       const resolved = resolve(mode);
+      if (get().mode === mode && get().resolved === resolved) return;
       apply(resolved);
       set({ mode, resolved });
       void saveThemeMode(mode);
@@ -50,8 +52,12 @@ export const useThemeStore = create<ThemeState>((set, get) => {
       const saved = await loadThemeMode();
       if (saved) {
         const resolved = resolve(saved);
-        apply(resolved);
-        set({ mode: saved, resolved, hydrated: true });
+        if (get().mode !== saved || get().resolved !== resolved) {
+          apply(resolved);
+          set({ mode: saved, resolved, hydrated: true });
+        } else {
+          set({ hydrated: true });
+        }
       } else {
         set({ hydrated: true });
       }
@@ -61,23 +67,23 @@ export const useThemeStore = create<ThemeState>((set, get) => {
 
 export const themeColors = {
   light: {
-    background: "#FAFAF8",
+    background: brandColors.background,
     card: "#FFFFFF",
-    border: "#E8DFD6",
+    border: "#E8E0E2",
     tabBar: "#FFFFFF",
-    tabActive: "#A85D3F",
-    tabInactive: "#B8956F",
-    addBorder: "#FAFAF8",
+    tabActive: brandColors.roseDark,
+    tabInactive: brandColors.grey,
+    addBorder: brandColors.background,
     statusBar: "dark" as const,
   },
   dark: {
-    background: "#141010",
-    card: "#2F2520",
-    border: "#5A4A40",
-    tabBar: "#1E1816",
-    tabActive: "#E09A7A",
-    tabInactive: "#9A8470",
-    addBorder: "#141010",
+    background: brandColors.backgroundDark,
+    card: "#252030",
+    border: "#4A4450",
+    tabBar: "#181C28",
+    tabActive: brandColors.roseLight,
+    tabInactive: brandColors.grey,
+    addBorder: brandColors.backgroundDark,
     statusBar: "light" as const,
   },
 };

@@ -1,4 +1,4 @@
-# ForkLoop
+# PickyBites
 
 A **native** iOS and Android food review app built with Expo and React Native. Track restaurants, rate dishes, follow friends, and get personalized recommendations based on your Taste DNA.
 

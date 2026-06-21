@@ -25,7 +25,6 @@ const STEPS = ["Cuisines", "Diet", "Budget", "Favorite Spot", "Food Goals"];
 
 export default function TasteQuizScreen() {
   const completeTasteQuiz = useAppStore((s) => s.completeTasteQuiz);
-  const reviews = useAppStore((s) => s.reviews);
   const currentUserId = useAppStore((s) => s.currentUserId);
   const [step, setStep] = useState(1);
   const [selected, setSelected] = useState<Cuisine[]>([]);
@@ -77,9 +76,7 @@ export default function TasteQuizScreen() {
     }
     setLoading(false);
     hapticSuccess();
-    const myReviews = reviews.filter((r) => r.userId === currentUserId);
-    if (myReviews.length === 0) router.replace("/add-review");
-    else router.replace("/(tabs)");
+    router.replace("/(tabs)");
   };
 
   const next = () => {
@@ -105,7 +102,7 @@ export default function TasteQuizScreen() {
         {step === 1 && (
           <>
             <Text className={`text-3xl font-bold ${ui.text.primary}`}>What do you love?</Text>
-            <Text className={ui.text.secondary}>Pick at least 3 cuisines to personalize ForkLoop.</Text>
+            <Text className={ui.text.secondary}>Pick at least 3 cuisines to personalize PickyBites.</Text>
             <View className="flex-row flex-wrap gap-2">
               {CUISINES.map((c) => (
                 <Tag key={c} label={c} active={selected.includes(c)} onPress={() => toggleCuisine(c)} />

@@ -1,6 +1,6 @@
 import { getSupabase } from "./client";
 import { mapBookmark } from "./mappers";
-import type { Bookmark } from "@/lib/types";
+import type { Bookmark, BucketListStatus } from "@/lib/types";
 import type { PlaceResult } from "@/lib/places/types";
 
 export async function fetchBookmarks(userId: string): Promise<Bookmark[]> {
@@ -15,7 +15,11 @@ export async function fetchBookmarks(userId: string): Promise<Bookmark[]> {
   return (data ?? []).map(mapBookmark);
 }
 
-export async function addBookmarkDb(userId: string, place: PlaceResult): Promise<Bookmark> {
+export async function addBookmarkDb(
+  userId: string,
+  place: PlaceResult,
+  reason = "Saved from Discover",
+): Promise<Bookmark> {
   const supabase = getSupabase();
   if (!supabase) throw new Error("Supabase not configured");
 
@@ -29,8 +33,11 @@ export async function addBookmarkDb(userId: string, place: PlaceResult): Promise
       place_city: place.city,
       place_cuisine: place.cuisine,
       place_image_url: place.imageUrl,
+      place_price_level: place.priceLevel,
       latitude: place.latitude,
       longitude: place.longitude,
+      status: "want_to_try",
+      notes: reason,
     })
     .select()
     .single();
@@ -48,7 +55,19 @@ export async function removeBookmarkDb(bookmarkId: string) {
 
 export async function addBookmarkFromRestaurantDb(
   userId: string,
-  restaurant: { id: string; googlePlaceId?: string | null; name: string; address: string; city: string; cuisine: string; imageUrl: string | null; latitude?: number | null; longitude?: number | null },
+  restaurant: {
+    id: string;
+    googlePlaceId?: string | null;
+    name: string;
+    address: string;
+    city: string;
+    cuisine: string;
+    priceLevel?: number;
+    imageUrl: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
+  },
+  reason = "Saved to bucket list",
 ): Promise<Bookmark> {
   const supabase = getSupabase();
   if (!supabase) throw new Error("Supabase not configured");
@@ -66,9 +85,43 @@ export async function addBookmarkFromRestaurantDb(
       place_city: restaurant.city,
       place_cuisine: restaurant.cuisine,
       place_image_url: restaurant.imageUrl,
+      place_price_level: restaurant.priceLevel,
       latitude: restaurant.latitude,
       longitude: restaurant.longitude,
+      status: "want_to_try",
+      notes: reason,
     })
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  return mapBookmark(data);
+}
+
+export async function updateBookmarkDb(
+  bookmarkId: string,
+  patch: {
+    status?: BucketListStatus;
+    reasonSaved?: string;
+    plannedAt?: string | null;
+    visitedAt?: string | null;
+    restaurantId?: string | null;
+  },
+): Promise<Bookmark> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error("Supabase not configured");
+
+  const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (patch.status) payload.status = patch.status;
+  if (patch.reasonSaved != null) payload.notes = patch.reasonSaved;
+  if (patch.plannedAt !== undefined) payload.planned_at = patch.plannedAt;
+  if (patch.visitedAt !== undefined) payload.visited_at = patch.visitedAt;
+  if (patch.restaurantId !== undefined) payload.restaurant_id = patch.restaurantId;
+
+  const { data, error } = await supabase
+    .from("bookmarks")
+    .update(payload)
+    .eq("id", bookmarkId)
     .select()
     .single();
 

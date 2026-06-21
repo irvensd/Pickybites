@@ -1,26 +1,19 @@
-import { View, Text, ScrollView, RefreshControl, ActivityIndicator, Pressable, Alert } from "react-native";
+import { View, Text, ScrollView, RefreshControl, ActivityIndicator, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { Ionicons } from "@expo/vector-icons";
 import { useAppStore } from "@/store/useAppStore";
 import { getRecommendations } from "@/lib/recommendations";
 import { getDishDiscoveries } from "@/lib/dish-discovery";
-import { APP_NAME } from "@/constants/branding";
 import { ui } from "@/constants/ui";
 import { CUISINES, type Cuisine } from "@/lib/types";
-import { RestaurantCard } from "@/components/restaurants/RestaurantCard";
-import { PlaceResultCard } from "@/components/restaurants/PlaceResultCard";
 import { PlaceSearch } from "@/components/restaurants/PlaceSearch";
-import { Tag } from "@/components/ui/Tag";
-import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useThemedColors } from "@/lib/useThemedColors";
 import { getCurrentCoordinates, distanceMeters } from "@/lib/location";
 import { searchNearbyRestaurants, searchAreaRestaurants, isGooglePlacesConfigured } from "@/lib/places/google";
 import type { PlaceResult, Coordinates } from "@/lib/places/types";
 import { DiscoverMap } from "@/components/maps/DiscoverMap";
-import { getTrendingRestaurants } from "@/lib/trending";
 import { DISCOVER_TABS, filterRestaurantsForTab, type DiscoverTab } from "@/lib/discover-curated";
 import { friendlyError } from "@/lib/errors";
 import { hapticSuccess } from "@/lib/haptics";
@@ -29,18 +22,15 @@ import { MAX_DISCOVER_RADIUS_METERS } from "@/lib/places/nearby-search";
 import { AddToListSheet } from "@/components/lists/AddToListSheet";
 import { DiscoverSectionHeader } from "@/components/discover/DiscoverSectionHeader";
 import { DishPickCarousel } from "@/components/discover/DishPickCarousel";
-import { FadeInView } from "@/components/ui/FadeInView";
+import {
+  DiscoverFilterPanel,
+  DiscoverScreenHeader,
+  DISTANCE_OPTIONS,
+} from "@/components/discover/DiscoverFilterPanel";
+import { RestaurantCard } from "@/components/restaurants/RestaurantCard";
+import { RestaurantListRow } from "@/components/restaurants/RestaurantListRow";
+import { PlaceListRow } from "@/components/restaurants/PlaceListRow";
 import { getCommunityRating } from "@/lib/restaurant-tags";
-
-const METERS_PER_MILE = 1609.34;
-
-const DISTANCE_OPTIONS = [
-  { label: "0.5 mi", meters: 800 },
-  { label: "1 mi", meters: Math.round(METERS_PER_MILE) },
-  { label: "3 mi", meters: Math.round(METERS_PER_MILE * 3) },
-  { label: "5 mi", meters: Math.round(METERS_PER_MILE * 5) },
-  { label: "10 mi", meters: MAX_DISCOVER_RADIUS_METERS },
-] as const;
 
 const DEFAULT_RADIUS = DISTANCE_OPTIONS[2].meters;
 
@@ -64,56 +54,56 @@ export default function DiscoverScreen() {
   const [nearby, setNearby] = useState<PlaceResult[]>([]);
   const [loadingNearby, setLoadingNearby] = useState(false);
   const [mapMode, setMapMode] = useState(false);
-  const [radiusMeters, setRadiusMeters] = useState(DEFAULT_RADIUS);
+  const [radiusMeters, setRadiusMeters] = useState<number>(DEFAULT_RADIUS);
   const [isAreaSearch, setIsAreaSearch] = useState(false);
   const [addToListTarget, setAddToListTarget] = useState<{ id: string; name: string } | null>(null);
   const [curatedTab, setCuratedTab] = useState<DiscoverTab>("for-you");
   const [mapMounted, setMapMounted] = useState(false);
 
   const recs = currentUserId ? getRecommendations(currentUserId, reviews, restaurants, follows, 3, user, bookmarks) : [];
-  let curatedRestaurants = useMemo(() => {
+
+  const communityFeed = useMemo(() => {
     let items = filterRestaurantsForTab(curatedTab, restaurants, reviews, bookmarks, currentUserId, {
       userCoords: coords,
     });
     if (cuisine) items = items.filter((r) => r.cuisine === cuisine);
-    return items.slice(0, 12);
+    return items.slice(0, 10);
   }, [curatedTab, restaurants, reviews, bookmarks, currentUserId, cuisine, coords]);
-  const dishPicks = currentUserId
-    ? getDishDiscoveries(currentUserId, reviews, dishes, restaurants, {
-        cuisine: (cuisine as Cuisine) ?? user?.favoriteCuisines[0],
-        coords: coords ?? undefined,
-        radiusMeters,
-        limit: 6,
-      })
-    : [];
-  const trending = getTrendingRestaurants(userCity, reviews, restaurants, 3);
 
-  const savrRestaurants = useMemo(
-    () => restaurants.filter((r) => !cuisine || r.cuisine === cuisine),
-    [restaurants, cuisine],
-  );
+  const dishPicks =
+    currentUserId && curatedTab === "for-you"
+      ? getDishDiscoveries(currentUserId, reviews, dishes, restaurants, {
+          cuisine: (cuisine as Cuisine) ?? user?.favoriteCuisines[0],
+          coords: coords ?? undefined,
+          radiusMeters,
+          limit: 6,
+        })
+      : [];
 
-  const loadNearby = useCallback(async (opts?: { center?: Coordinates; radius?: number; area?: boolean }) => {
-    if (!isGooglePlacesConfigured()) return;
-    setLoadingNearby(true);
-    try {
-      const c = opts?.center ?? coords ?? await getCurrentCoordinates();
-      const radius = Math.min(opts?.radius ?? radiusMeters, MAX_DISCOVER_RADIUS_METERS);
-      if (c) {
-        setCoords(c);
-        if (opts?.radius != null) setRadiusMeters(radius);
-        setIsAreaSearch(opts?.area ?? false);
-        const places = opts?.area
-          ? await searchAreaRestaurants(c, radius)
-          : await searchNearbyRestaurants(c, radius);
-        setNearby(places);
+  const loadNearby = useCallback(
+    async (opts?: { center?: Coordinates; radius?: number; area?: boolean }) => {
+      if (!isGooglePlacesConfigured()) return;
+      setLoadingNearby(true);
+      try {
+        const c = opts?.center ?? coords ?? (await getCurrentCoordinates());
+        const radius = Math.min(opts?.radius ?? radiusMeters, MAX_DISCOVER_RADIUS_METERS);
+        if (c) {
+          setCoords(c);
+          if (opts?.radius != null) setRadiusMeters(radius);
+          setIsAreaSearch(opts?.area ?? false);
+          const places = opts?.area
+            ? await searchAreaRestaurants(c, radius)
+            : await searchNearbyRestaurants(c, radius);
+          setNearby(places);
+        }
+      } catch (e) {
+        Alert.alert("Location error", friendlyError(e, "Could not load nearby restaurants"));
+      } finally {
+        setLoadingNearby(false);
       }
-    } catch (e) {
-      Alert.alert("Location error", friendlyError(e, "Could not load nearby restaurants"));
-    } finally {
-      setLoadingNearby(false);
-    }
-  }, [coords, radiusMeters]);
+    },
+    [coords, radiusMeters],
+  );
 
   const searchMapArea = useCallback(
     async (center: Coordinates, radius: number) => {
@@ -186,7 +176,7 @@ export default function DiscoverScreen() {
   const handleBookmark = async (place: PlaceResult) => {
     const result = await toggleBookmark(place);
     if (result.ok) hapticSuccess();
-    else if (!result.ok) Alert.alert("Bookmark", result.error);
+    else if (!result.ok) Alert.alert("Save", result.error);
   };
 
   const openAddToList = (restaurantId: string, name: string) => {
@@ -226,9 +216,10 @@ export default function DiscoverScreen() {
   const handleMapAddToList = async (id: string, type: "rated" | "nearby") => {
     const restaurantId = await resolvePinRestaurant(id, type);
     if (!restaurantId) return;
-    const name = type === "rated"
-      ? restaurants.find((r) => r.id === id)?.name ?? "Restaurant"
-      : nearby.find((p) => p.googlePlaceId === id)?.name ?? "Restaurant";
+    const name =
+      type === "rated"
+        ? (restaurants.find((r) => r.id === id)?.name ?? "Restaurant")
+        : (nearby.find((p) => p.googlePlaceId === id)?.name ?? "Restaurant");
     openAddToList(restaurantId, name);
   };
 
@@ -252,11 +243,8 @@ export default function DiscoverScreen() {
     if (loadingNearby) return "Searching…";
     if (!coords) return "Turn on location to explore nearby.";
     if (nearbyFiltered.length === 0) return "No matches — try a wider radius or different cuisine.";
-    const distances = nearbyFiltered.map((p) => distanceMeters(coords!, p));
-    const min = Math.min(...distances);
-    const max = Math.max(...distances);
-    return `${nearbyFiltered.length} spot${nearbyFiltered.length === 1 ? "" : "s"} · ${formatDistance(min)}–${formatDistance(max)} away`;
-  }, [loadingNearby, coords, nearbyFiltered]);
+    return `${nearbyFiltered.length} spot${nearbyFiltered.length === 1 ? "" : "s"} within ${selectedRadiusLabel}`;
+  }, [loadingNearby, coords, nearbyFiltered, selectedRadiusLabel]);
 
   const getPlaceRating = useCallback(
     (place: PlaceResult) => {
@@ -267,102 +255,34 @@ export default function DiscoverScreen() {
     [restaurants, reviews],
   );
 
-  const toggleMap = (map: boolean) => {
-    setMapMode(map);
-  };
-
-  const cuisineFilters = (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-2">
-      <Tag label="All" active={!cuisine} onPress={() => setCuisine(null)} />
-      {CUISINES.slice(0, 10).map((c) => (
-        <Tag key={c} label={c} active={cuisine === c} onPress={() => setCuisine(cuisine === c ? null : c)} />
-      ))}
-    </ScrollView>
+  const tabLabel = DISCOVER_TABS.find((t) => t.value === curatedTab)?.label ?? "Discover";
+  const savrRestaurants = useMemo(
+    () => restaurants.filter((r) => !cuisine || r.cuisine === cuisine),
+    [restaurants, cuisine],
   );
 
-  const distanceFilters = isGooglePlacesConfigured() ? (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-2">
-      {DISTANCE_OPTIONS.map((opt) => (
-        <Tag
-          key={opt.meters}
-          label={opt.label}
-          active={radiusMeters === opt.meters}
-          onPress={() => selectDistance(opt.meters)}
-        />
-      ))}
-    </ScrollView>
-  ) : null;
-
-  const stickyHeader = (
-    <View className={`px-4 pt-2 pb-3 gap-3 ${ui.screen}`}>
-      <View>
-        <Text className={`text-2xl font-bold ${ui.text.primary}`}>Discover</Text>
-        <Text className={`text-sm mt-0.5 ${ui.text.muted}`}>
-          {userCity ? `Explore ${userCity} and beyond` : "Find your next favorite spot"}
-        </Text>
-      </View>
-
-      <SegmentedControl
-        variant="brand"
-        options={[
-          { value: "list", label: "List" },
-          { value: "map", label: "Map" },
-        ]}
-        value={mapMode ? "map" : "list"}
-        onChange={(v) => toggleMap(v === "map")}
-      />
-
-      {!mapMode && (
-        <PlaceSearch
-          coords={coords}
-          onSelect={ratePlace}
-          placeholder="Search restaurants, neighborhoods, cities…"
-        />
-      )}
-
-      {cuisineFilters}
-
-      {!mapMode && isGooglePlacesConfigured() && distanceFilters}
-
-      {!mapMode && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-2">
-          {DISCOVER_TABS.map((tab) => (
-            <Tag
-              key={tab.value}
-              label={tab.label}
-              active={curatedTab === tab.value}
-              onPress={() => setCuratedTab(tab.value)}
-            />
-          ))}
-        </ScrollView>
-      )}
-    </View>
+  const filterPanel = (
+    <DiscoverFilterPanel
+      curatedTab={curatedTab}
+      onTabChange={setCuratedTab}
+      cuisine={cuisine}
+      onCuisineChange={setCuisine}
+      radiusMeters={radiusMeters}
+      onRadiusChange={selectDistance}
+      showDistance={isGooglePlacesConfigured()}
+    />
   );
 
   if (mapMode) {
     return (
       <SafeAreaView className={`flex-1 ${ui.screen}`} edges={["top"]}>
-        <View className="px-4 pt-2 pb-2 gap-3">
-          <View>
-            <Text className={`text-2xl font-bold ${ui.text.primary}`}>Discover</Text>
-            <Text className={`text-sm mt-0.5 ${ui.text.muted}`}>Map view · {selectedRadiusLabel}</Text>
-          </View>
-          <SegmentedControl
-            variant="brand"
-            options={[
-              { value: "list", label: "List" },
-              { value: "map", label: "Map" },
-            ]}
-            value="map"
-            onChange={(v) => toggleMap(v === "map")}
+        <View className="px-4 pt-2 pb-3 gap-3">
+          <DiscoverScreenHeader
+            mapMode
+            onMapModeChange={setMapMode}
+            subtitle={`Map · ${selectedRadiusLabel}${isAreaSearch ? " · area search" : ""}`}
           />
-          {cuisineFilters}
-          {distanceFilters}
-          {isAreaSearch && (
-            <Text className={`text-xs ${ui.text.muted}`}>
-              Map area search — tap locate to return to you.
-            </Text>
-          )}
+          {filterPanel}
         </View>
 
         {loadingNearby && !coords ? (
@@ -389,7 +309,6 @@ export default function DiscoverScreen() {
         ) : coords && !mapMounted ? (
           <View className="flex-1 items-center justify-center">
             <ActivityIndicator color={colors.spinner} size="large" />
-            <Text className={`mt-3 ${ui.text.muted}`}>Opening map…</Text>
           </View>
         ) : (
           <View className="flex-1 items-center justify-center px-6">
@@ -406,6 +325,10 @@ export default function DiscoverScreen() {
     );
   }
 
+  const showCommunity = curatedTab !== "for-you" && communityFeed.length > 0;
+  const showForYouPicks = curatedTab === "for-you" && recs.length > 0;
+  const showNearYou = isGooglePlacesConfigured();
+
   return (
     <SafeAreaView className={`flex-1 ${ui.screen}`} edges={["top"]}>
       <AddToListSheet
@@ -419,88 +342,131 @@ export default function DiscoverScreen() {
         stickyHeaderIndices={[0]}
         showsVerticalScrollIndicator={false}
         contentContainerClassName="pb-28"
-        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.spinner} />}
+        refreshControl={
+          <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.spinner} />
+        }
       >
-        {stickyHeader}
+        <View className={`px-4 pt-2 pb-3 gap-3 ${ui.screen}`}>
+          <DiscoverScreenHeader mapMode={false} onMapModeChange={setMapMode} />
+          <PlaceSearch
+            coords={coords}
+            onSelect={ratePlace}
+            placeholder="Search restaurants or neighborhoods…"
+          />
+          {filterPanel}
+        </View>
 
-        <View className="px-4 gap-6 pt-2">
-          {curatedRestaurants.length > 0 && (
-            <FadeInView key={curatedTab} className="gap-3">
-              <DiscoverSectionHeader
-                icon="sparkles"
-                iconColor={colors.brand}
-                title={DISCOVER_TABS.find((t) => t.value === curatedTab)?.label ?? "Curated"}
-                subtitle="Picked from your taste profile and community activity"
-              />
-              <View className="gap-3">
-                {curatedRestaurants.map((r, i) => (
-                  <RestaurantCard
-                    key={r.id}
-                    restaurant={r}
-                    reviews={reviews}
-                    bookmarks={bookmarks}
-                    userCity={userCity}
-                    index={i}
-                    isBookmarked={isRestaurantBookmarked(r)}
-                    onBookmark={async () => {
-                      const result = await toggleRestaurantBookmark(r);
-                      if (result.ok) hapticSuccess();
-                      else if (!result.ok) Alert.alert("Save", result.error);
-                    }}
-                  />
-                ))}
-              </View>
-            </FadeInView>
-          )}
-
-          {dishPicks.length > 0 && (
+        <View className="px-4 gap-8 pt-2">
+          {curatedTab === "for-you" && dishPicks.length > 0 && (
             <View className="gap-3">
               <DiscoverSectionHeader
                 icon="restaurant"
                 iconColor={colors.brand}
                 title="Best dishes near you"
-                subtitle="Based on your taste profile"
+                subtitle="From your taste profile"
               />
               <DishPickCarousel picks={dishPicks} />
             </View>
           )}
 
-          {isGooglePlacesConfigured() && (
+          {showForYouPicks && (
+            <View className="gap-3">
+              <DiscoverSectionHeader
+                icon="sparkles"
+                iconColor={colors.brand}
+                title="Recommended for you"
+                subtitle="Based on your ratings and follows"
+              />
+              <View className="gap-3">
+                {recs.map((rec, i) => (
+                  <View key={rec.restaurant.id}>
+                    <RestaurantCard
+                      restaurant={rec.restaurant}
+                      reviews={reviews}
+                      bookmarks={bookmarks}
+                      userCity={userCity}
+                      index={i}
+                      isBookmarked={isRestaurantBookmarked(rec.restaurant)}
+                      onBookmark={async () => {
+                        const result = await toggleRestaurantBookmark(rec.restaurant);
+                        if (result.ok) hapticSuccess();
+                      }}
+                    />
+                    <Text className={`text-xs px-1 mt-1 ${ui.text.muted}`}>{rec.reason}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {showCommunity && (
+            <View className="gap-3">
+              <DiscoverSectionHeader
+                icon="people"
+                iconColor={colors.brand}
+                title={tabLabel}
+                subtitle={`Community picks${userCity ? ` · ${userCity}` : ""}`}
+              />
+              <View className="gap-2">
+                {communityFeed.map((r) => (
+                  <RestaurantListRow
+                    key={r.id}
+                    restaurant={r}
+                    reviews={reviews}
+                    onPress={() => router.push(`/restaurant/${r.id}`)}
+                  />
+                ))}
+              </View>
+            </View>
+          )}
+
+          {curatedTab === "for-you" && communityFeed.length > 0 && (
+            <View className="gap-3">
+              <DiscoverSectionHeader
+                icon="bookmark"
+                iconColor={colors.brand}
+                title="On your radar"
+                subtitle="Saved or not yet reviewed"
+              />
+              <View className="gap-2">
+                {communityFeed.slice(0, 6).map((r) => (
+                  <RestaurantListRow
+                    key={r.id}
+                    restaurant={r}
+                    reviews={reviews}
+                    onPress={() => router.push(`/restaurant/${r.id}`)}
+                  />
+                ))}
+              </View>
+            </View>
+          )}
+
+          {showNearYou && (
             <View className="gap-3">
               <DiscoverSectionHeader
                 icon={isAreaSearch ? "map" : "location"}
                 iconColor={colors.brand}
-                title={isAreaSearch ? "Map area" : "Near you"}
+                title="Near you"
                 subtitle={nearbyStatus}
                 onAction={() => loadNearby()}
               />
               {loadingNearby ? (
                 <ActivityIndicator color={colors.spinner} className="py-8" />
               ) : nearbyFiltered.length > 0 ? (
-                <View className="gap-3">
-                  {nearbyFiltered.map((place, i) => {
+                <View className="gap-2">
+                  {nearbyFiltered.map((place) => {
                     const linked = restaurants.find((r) => r.googlePlaceId === place.googlePlaceId);
                     const community = linked ? getCommunityRating(linked.id, reviews) : null;
                     return (
-                      <PlaceResultCard
+                      <PlaceListRow
                         key={place.googlePlaceId}
                         place={place}
-                        index={i}
-                        savrRating={community?.avgRating ?? getPlaceRating(place)}
-                        reviewCount={community?.reviewCount}
-                        restaurantId={linked?.id}
-                        reviews={reviews}
-                        bookmarks={bookmarks}
-                        restaurants={restaurants}
-                        userCity={userCity}
-                        onPress={() => openPlace(place)}
                         distanceMeters={coords ? distanceMeters(coords, place) : undefined}
+                        rating={community?.avgRating ?? getPlaceRating(place)}
+                        reviewCount={community?.reviewCount}
+                        onPress={() => openPlace(place)}
                         isBookmarked={isBookmarked(place.googlePlaceId)}
                         onBookmark={() => handleBookmark(place)}
-                        onAddToList={async () => {
-                          const result = await ensureRestaurantFromPlace(place);
-                          if (!("error" in result)) openAddToList(result.id, place.name);
-                        }}
                       />
                     );
                   })}
@@ -520,83 +486,7 @@ export default function DiscoverScreen() {
             </View>
           )}
 
-          {trending.length > 0 && (
-            <View className="gap-3">
-              <DiscoverSectionHeader
-                icon="flame"
-                iconColor={colors.brand}
-                title={`Trending${userCity ? ` in ${userCity}` : ""}`}
-                subtitle="Most reviewed this week"
-              />
-              <View className="gap-3">
-                {trending.map(({ restaurant }, i) => (
-                  <RestaurantCard
-                    key={restaurant.id}
-                    restaurant={restaurant}
-                    reviews={reviews}
-                    bookmarks={bookmarks}
-                    userCity={userCity}
-                    index={i}
-                    isBookmarked={isRestaurantBookmarked(restaurant)}
-                    onBookmark={async () => {
-                      const result = await toggleRestaurantBookmark(restaurant);
-                      if (result.ok) hapticSuccess();
-                    }}
-                  />
-                ))}
-              </View>
-            </View>
-          )}
-
-          {!cuisine && recs.length > 0 && (
-            <View className="gap-3">
-              <DiscoverSectionHeader
-                icon="sparkles"
-                iconColor={colors.brand}
-                title="Picked for you"
-                subtitle="From your ratings and follows"
-              />
-              <View className="gap-3">
-                {recs.map((rec, i) => (
-                  <View key={rec.restaurant.id}>
-                    <RestaurantCard
-                      restaurant={rec.restaurant}
-                      reviews={reviews}
-                      bookmarks={bookmarks}
-                      userCity={userCity}
-                      index={i}
-                    />
-                    <Text className={`text-xs px-1 mt-1 ${ui.text.muted}`}>{rec.reason}</Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-          )}
-
-          {savrRestaurants.length > 0 && (
-            <View className="gap-3">
-              <DiscoverSectionHeader
-                icon="star"
-                iconColor={colors.brand}
-                title={`Rated on ${APP_NAME}`}
-                subtitle={`${savrRestaurants.length} in your taste map`}
-              />
-              <View className="gap-3">
-                {savrRestaurants.slice(0, 8).map((r, i) => (
-                  <RestaurantCard
-                    key={r.id}
-                    restaurant={r}
-                    reviews={reviews}
-                    bookmarks={bookmarks}
-                    userCity={userCity}
-                    index={i}
-                  />
-                ))}
-              </View>
-            </View>
-          )}
-
-          {!isGooglePlacesConfigured() && savrRestaurants.length === 0 && (
+          {!isGooglePlacesConfigured() && communityFeed.length === 0 && recs.length === 0 && (
             <EmptyState
               icon="key-outline"
               title="Places search not configured"
@@ -604,13 +494,13 @@ export default function DiscoverScreen() {
             />
           )}
 
-          {savrRestaurants.length === 0 && !loadingNearby && isGooglePlacesConfigured() && nearbyFiltered.length === 0 && (
+          {curatedTab !== "for-you" && communityFeed.length === 0 && !loadingNearby && (
             <EmptyState
               icon="restaurant-outline"
-              title="Start exploring"
-              description="Search above or pick a spot from Near You to leave the first review."
-              actionLabel="Write a Review"
-              onAction={() => router.push("/add-review")}
+              title={`No ${tabLabel.toLowerCase()} spots yet`}
+              description="Try another category or add more reviews to grow the community feed."
+              actionLabel="Browse For You"
+              onAction={() => setCuratedTab("for-you")}
             />
           )}
         </View>

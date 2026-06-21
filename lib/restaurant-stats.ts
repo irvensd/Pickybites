@@ -1,4 +1,5 @@
 import type { Follow, Review, User } from "./types";
+import { getReviewOverallRating } from "./review-scores";
 
 export type RestaurantRatingsBreakdown = {
   yourRating: number | null;
@@ -23,19 +24,19 @@ export function getRestaurantRatingsBreakdown(
     : [];
   const friendReviews = all.filter((r) => friendIds.includes(r.userId));
   const friendsAvg = friendReviews.length
-    ? friendReviews.reduce((s, r) => s + r.rating, 0) / friendReviews.length
+    ? friendReviews.reduce((s, r) => s + getReviewOverallRating(r), 0) / friendReviews.length
     : null;
-  const overallAvg = all.length ? all.reduce((s, r) => s + r.rating, 0) / all.length : null;
+  const overallAvg = all.length ? all.reduce((s, r) => s + getReviewOverallRating(r), 0) / all.length : null;
 
   const friendsWhoRated = friendReviews
     .map((r) => {
       const user = getUser(r.userId);
-      return user ? { user, rating: r.rating, reviewId: r.id } : null;
+      return user ? { user, rating: getReviewOverallRating(r), reviewId: r.id } : null;
     })
     .filter(Boolean) as RestaurantRatingsBreakdown["friendsWhoRated"];
 
   return {
-    yourRating: yours?.rating ?? null,
+    yourRating: yours ? getReviewOverallRating(yours) : null,
     friendsAvg,
     overallAvg,
     friendCount: friendReviews.length,

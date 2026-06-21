@@ -1,15 +1,20 @@
 import { useState } from "react";
 import { View, Text, ScrollView, Pressable, Alert } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
+import { goBackOr } from "@/lib/navigation";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppStore } from "@/store/useAppStore";
-import { RestaurantCard } from "@/components/restaurants/RestaurantCard";
+import { RestaurantListRow } from "@/components/restaurants/RestaurantListRow";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Avatar } from "@/components/ui/Avatar";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { ui } from "@/constants/ui";
+import { iconColors } from "@/constants/ui";
+import { useThemeStore } from "@/store/useThemeStore";
 
 export default function ListDetailScreen() {
+  const isDark = useThemeStore((s) => s.resolved) === "dark";
   const { id } = useLocalSearchParams<{ id: string }>();
   const {
     lists, listItems, getRestaurant, addListItem, removeListItem, deleteList,
@@ -50,33 +55,40 @@ export default function ListDetailScreen() {
         style: "destructive",
         onPress: async () => {
           await deleteList(list.id);
-          router.back();
+          goBackOr("/lists");
         },
       },
     ]);
   };
 
   return (
-    <ScrollView className="flex-1 bg-savr-50 dark:bg-savr-950" contentContainerClassName="px-4 pb-8 gap-4">
+    <ScrollView className={`flex-1 ${ui.screen}`} contentContainerClassName="px-4 pb-8 gap-5">
       <View className="flex-row justify-between items-start pt-2">
-        <View className="flex-1">
-          <Text className="text-2xl font-bold text-savr-900 dark:text-savr-100">{list.name}</Text>
-          {list.description ? <Text className="text-sm text-savr-500 dark:text-savr-400 mt-1">{list.description}</Text> : null}
-          {!isOwner && <Text className="text-xs text-savr-400 mt-1">Shared with you</Text>}
+        <View className="flex-1 pr-3">
+          <Text className={`text-2xl font-bold ${ui.text.primary}`}>{list.name}</Text>
+          {list.description ? (
+            <Text className={`text-sm mt-1 ${ui.text.muted}`}>{list.description}</Text>
+          ) : null}
+          <Text className={`text-xs mt-2 ${ui.text.faint}`}>
+            {items.length} spot{items.length === 1 ? "" : "s"}
+            {!isOwner ? " · Shared with you" : ""}
+          </Text>
         </View>
         {isOwner && (
           <Pressable onPress={handleDelete} className="p-2">
-            <Ionicons name="trash-outline" size={22} color="#B8956F" />
+            <Ionicons name="trash-outline" size={22} color={isDark ? iconColors.mutedDark : iconColors.muted} />
           </Pressable>
         )}
       </View>
 
       {isOwner && (
-        <View className="gap-2">
+        <Card className="gap-3">
           <View className="flex-row items-center justify-between">
-            <Text className="font-semibold text-savr-900 dark:text-savr-100">Collaborators</Text>
+            <Text className={`font-semibold ${ui.text.primary}`}>Collaborators</Text>
             <Pressable onPress={() => setInviting(!inviting)}>
-              <Text className="text-sm text-savr-600 dark:text-savr-300">{inviting ? "Done" : "Invite"}</Text>
+              <Text className={`text-sm font-medium text-savr-600 dark:text-savr-400`}>
+                {inviting ? "Done" : "Invite"}
+              </Text>
             </Pressable>
           </View>
           {collaborators.length === 0 ? (
@@ -87,16 +99,16 @@ export default function ListDetailScreen() {
               return (
                 <View key={c.id} className="flex-row items-center gap-3">
                   <Avatar name={u?.displayName ?? "?"} src={u?.avatarUrl} size="sm" />
-                  <Text className="flex-1 text-savr-800 dark:text-savr-200">{u?.displayName}</Text>
+                  <Text className={`flex-1 ${ui.text.secondary}`}>{u?.displayName}</Text>
                   <Pressable onPress={() => removeListCollaborator(c.id)}>
-                    <Ionicons name="close-circle-outline" size={20} color="#B8956F" />
+                    <Ionicons name="close-circle-outline" size={20} color={isDark ? iconColors.mutedDark : iconColors.muted} />
                   </Pressable>
                 </View>
               );
             })
           )}
           {inviting && (
-            <View className="gap-2 mt-1">
+            <View className="gap-2 pt-1 border-t border-savr-100 dark:border-savr-800">
               {inviteCandidates.length === 0 ? (
                 <Text className={`text-sm ${ui.text.muted}`}>Follow friends first to invite them.</Text>
               ) : (
@@ -110,14 +122,14 @@ export default function ListDetailScreen() {
                     className="flex-row items-center gap-3 py-2"
                   >
                     <Avatar name={u!.displayName} src={u!.avatarUrl} size="sm" />
-                    <Text className="text-savr-800 dark:text-savr-200">{u!.displayName}</Text>
-                    <Ionicons name="person-add-outline" size={18} color="#A85D3F" />
+                    <Text className={`flex-1 ${ui.text.secondary}`}>{u!.displayName}</Text>
+                    <Ionicons name="person-add-outline" size={18} color={isDark ? iconColors.brandDark : iconColors.brand} />
                   </Pressable>
                 ))
               )}
             </View>
           )}
-        </View>
+        </Card>
       )}
 
       {canEdit && (
@@ -130,40 +142,62 @@ export default function ListDetailScreen() {
 
       {adding && canEdit && (
         <View className="gap-2">
+          <Text className={`text-xs font-semibold uppercase tracking-wide ${ui.text.muted}`}>Your reviewed spots</Text>
           {addable.length === 0 ? (
-            <Card><Text className={`text-center py-4 ${ui.text.muted}`}>Review more spots to add them here.</Text></Card>
+            <Card>
+              <Text className={`text-center py-4 ${ui.text.muted}`}>Review more spots to add them here.</Text>
+            </Card>
           ) : (
             addable.map((r) => (
-              <Pressable
+              <RestaurantListRow
                 key={r.id}
+                restaurant={r}
+                reviews={reviews}
                 onPress={async () => {
                   const result = await addListItem(list.id, r.id);
                   if (!result.ok) Alert.alert("Error", result.error);
                 }}
-              >
-                <RestaurantCard restaurant={r} />
-              </Pressable>
+                trailing={
+                  <Ionicons name="add-circle-outline" size={22} color={isDark ? iconColors.brandDark : iconColors.brand} />
+                }
+              />
             ))
           )}
         </View>
       )}
 
-      <Text className="font-semibold text-savr-900 dark:text-savr-100">{items.length} spots</Text>
-      {items.map((item) => {
-        const r = getRestaurant(item.restaurantId);
-        if (!r) return null;
-        return (
-          <View key={item.id}>
-            <RestaurantCard restaurant={r} />
-            {item.note ? <Text className={`text-xs px-1 mt-1 ${ui.text.muted}`}>{item.note}</Text> : null}
-            {canEdit && (
-              <Pressable onPress={() => removeListItem(item.id)} className="self-end mt-1 px-2 py-1">
-                <Text className="text-xs text-red-500">Remove</Text>
-              </Pressable>
-            )}
-          </View>
-        );
-      })}
+      <View className="gap-2">
+        <Text className={`text-xs font-semibold uppercase tracking-wide ${ui.text.muted}`}>Spots on this list</Text>
+        {items.length === 0 ? (
+          <EmptyState
+            icon="restaurant-outline"
+            title="No spots yet"
+            description={canEdit ? "Add restaurants you've reviewed." : "This list is empty."}
+          />
+        ) : (
+          items.map((item) => {
+            const r = getRestaurant(item.restaurantId);
+            if (!r) return null;
+            return (
+              <View key={item.id} className="gap-1">
+                <RestaurantListRow
+                  restaurant={r}
+                  reviews={reviews}
+                  onPress={() => router.push(`/restaurant/${r.id}`)}
+                />
+                {item.note ? (
+                  <Text className={`text-xs px-1 ${ui.text.muted}`}>{item.note}</Text>
+                ) : null}
+                {canEdit && (
+                  <Pressable onPress={() => removeListItem(item.id)} className="self-end px-2 py-1">
+                    <Text className="text-xs text-red-500">Remove</Text>
+                  </Pressable>
+                )}
+              </View>
+            );
+          })
+        )}
+      </View>
     </ScrollView>
   );
 }

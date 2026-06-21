@@ -78,6 +78,23 @@ export interface AppNotification {
   createdAt: string;
 }
 
+export type BucketListStatus = "want_to_try" | "planned" | "visited";
+
+export const BUCKET_LIST_STATUS_LABELS: Record<BucketListStatus, string> = {
+  want_to_try: "Want To Try",
+  planned: "Planned",
+  visited: "Visited",
+};
+
+export const BUCKET_SAVE_REASONS = [
+  "Looks interesting",
+  "Friend recommended",
+  "Special occasion",
+  "Near me",
+  "Trending spot",
+  "Saved from Discover",
+] as const;
+
 export interface Bookmark {
   id: string;
   userId: string;
@@ -87,10 +104,16 @@ export interface Bookmark {
   placeAddress: string;
   placeCity: string;
   placeCuisine: Cuisine | null;
+  placePriceLevel: PriceLevel | null;
   placeImageUrl: string | null;
   latitude: number | null;
   longitude: number | null;
+  status: BucketListStatus;
+  reasonSaved: string;
+  plannedAt: string | null;
+  visitedAt: string | null;
   createdAt: string;
+  updatedAt: string;
 }
 
 export interface Restaurant {
@@ -126,11 +149,26 @@ export interface ReviewPhoto {
   createdAt: string;
 }
 
+export interface ReviewCategoryScores {
+  foodQuality: number;
+  service: number;
+  atmosphere: number;
+  value: number;
+}
+
+export type WaitTime = "under_15" | "15_30" | "30_60" | "over_60";
+
 export interface Review {
   id: string;
   userId: string;
   restaurantId: string;
+  /** Overall score (auto-calculated or manually adjusted). */
   rating: number;
+  categoryScores: ReviewCategoryScores;
+  ratingManualOverride: boolean;
+  waitTime: WaitTime | null;
+  wouldReturn: boolean | null;
+  wouldRecommend: boolean | null;
   text: string;
   visitDate: string;
   tags: ReviewTag[];
@@ -187,7 +225,19 @@ export interface ListItem {
 export interface TasteDNA {
   favoriteCuisines: { cuisine: Cuisine; count: number; avgRating: number }[];
   averageRating: number;
+  categoryAverages: ReviewCategoryScores;
   mostReviewedCuisine: Cuisine | null;
+  topCuisine: Cuisine | null;
+  top3Cuisines: Cuisine[];
+  mostVisitedCity: string | null;
+  favoriteRestaurantType: string;
+  cuisinesTried: number;
+  topCuisineShare: number;
+  spicyCuisineShare: number;
+  americanShare: number;
+  casualTagShare: number;
+  cityConcentration: number;
+  fineDiningShare: number;
   preferredPriceLevel: PriceLevel | null;
   adventureScore: number;
   hiddenGemScore: number;
@@ -196,12 +246,19 @@ export interface TasteDNA {
   veganFriendlyScore: number;
   topDishes: Dish[];
   topRestaurants: { restaurant: Restaurant; rating: number }[];
+  personality: import("./taste-personality").TastePersonalityProfile;
 }
 
 /** Full Taste DNA output used by core engine + hooks. */
 export interface CoreTasteDna {
   taste_label: string;
+  food_personality: import("./taste-personality").TastePersonalityLabel;
+  personality_headline: string;
+  personality_explanation: string;
   top_cuisine: Cuisine | string;
+  top_3_cuisines: Cuisine[];
+  most_visited_city: string | null;
+  favorite_restaurant_type: string;
   average_rating: number;
   total_reviews: number;
   total_dishes: number;

@@ -54,7 +54,7 @@ export default function Signup() {
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} className="flex-1">
         <ScrollView contentContainerClassName="px-6 py-8 gap-4" keyboardShouldPersistTaps="handled">
           <View className="items-center">
-            <Logo size="md" />
+            <Logo size="md" showName showTagline />
           </View>
           <Text className="text-3xl font-bold text-savr-900 dark:text-savr-100 mt-2">Create account</Text>
           <Text className="text-savr-600 dark:text-savr-400">Start building your personal taste map.</Text>

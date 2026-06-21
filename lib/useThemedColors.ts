@@ -1,4 +1,5 @@
 import { useThemeStore, themeColors } from "@/store/useThemeStore";
+import { brandColors } from "@/constants/branding";
 
 export function useThemedColors() {
   const resolved = useThemeStore((s) => s.resolved);
@@ -9,14 +10,14 @@ export function useThemedColors() {
     isDark,
     resolved,
     palette,
-    brand: isDark ? "#E09A7A" : "#A85D3F",
-    brandSoft: isDark ? "#D4896A" : "#C4785A",
-    icon: isDark ? "#C4A882" : "#8B4A32",
-    iconMuted: isDark ? "#9A8470" : "#B8956F",
-    placeholder: isDark ? "#7A6B5C" : "#D4C4B5",
-    spinner: isDark ? "#D4896A" : "#A85D3F",
+    brand: isDark ? brandColors.roseLight : brandColors.roseDark,
+    brandSoft: isDark ? brandColors.roseMuted : brandColors.rose,
+    icon: isDark ? brandColors.roseLight : brandColors.navy,
+    iconMuted: isDark ? brandColors.grey : brandColors.greyLight,
+    placeholder: isDark ? "#6B6570" : "#CFC5C8",
+    spinner: isDark ? brandColors.roseMuted : brandColors.roseDark,
     heart: "#ef4444",
     danger: "#ef4444",
-    divider: isDark ? "#4A3D35" : "#E8DFD6",
+    divider: isDark ? "#4A4450" : "#E8E0E2",
   };
 }

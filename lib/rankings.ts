@@ -1,4 +1,20 @@
 import type { Cuisine, Dish, PriceLevel, RankingFilters, Restaurant, Review, ReviewTag } from "./types";
+import type { RankingCategoryId } from "./ranking-categories";
+import { reviewMatchesRankingCategory } from "./ranking-categories";
+import { getReviewOverallRating } from "./review-scores";
+
+export type LeaderboardEntry = {
+  rank: number;
+  restaurant_id: string;
+  restaurant_name: string;
+  image_url: string | null;
+  cuisine: Cuisine;
+  city: string;
+  average_score: number;
+  last_visit_date: string;
+  review_count: number;
+  restaurant: Restaurant;
+};
 
 export type UserRestaurantRanking = {
   rank: number;
@@ -8,6 +24,7 @@ export type UserRestaurantRanking = {
   cuisine: Cuisine;
   city: string;
   rating: number;
+  average_score: number;
   review_count_by_user: number;
   last_visit_date: string;
   tags: ReviewTag[];
@@ -57,7 +74,7 @@ export function getCommunityRestaurantScore(
   if (!all.length) {
     return { average_rating: 0, review_count: 0, weighted_score: priorMean };
   }
-  const average_rating = all.reduce((s, r) => s + r.rating, 0) / all.length;
+  const average_rating = all.reduce((s, r) => s + getReviewOverallRating(r), 0) / all.length;
   const review_count = all.length;
   const weighted_score =
     (average_rating * review_count + priorMean * priorWeight) / (review_count + priorWeight);
@@ -97,12 +114,15 @@ export function getUserRestaurantRankings(
       const sorted = [...userReviews].sort(
         (a, b) => new Date(b.visitDate).getTime() - new Date(a.visitDate).getTime(),
       );
-      const best = [...userReviews].sort((a, b) => b.rating - a.rating)[0];
+      const best = [...userReviews].sort((a, b) => getReviewOverallRating(b) - getReviewOverallRating(a))[0];
+      const average_score =
+        userReviews.reduce((s, r) => s + getReviewOverallRating(r), 0) / userReviews.length;
       const tags = [...new Set(userReviews.flatMap((r) => r.tags))];
 
       return {
         restaurant,
-        rating: best.rating,
+        rating: getReviewOverallRating(best),
+        average_score: Math.round(average_score * 10) / 10,
         review_count_by_user: userReviews.length,
         last_visit_date: sorted[0].visitDate,
         tags,
@@ -111,6 +131,7 @@ export function getUserRestaurantRankings(
     .filter(Boolean) as {
       restaurant: Restaurant;
       rating: number;
+      average_score: number;
       review_count_by_user: number;
       last_visit_date: string;
       tags: ReviewTag[];
@@ -118,7 +139,7 @@ export function getUserRestaurantRankings(
 
   return items
     .sort((a, b) => {
-      if (b.rating !== a.rating) return b.rating - a.rating;
+      if (b.average_score !== a.average_score) return b.average_score - a.average_score;
       const dateDiff =
         new Date(b.last_visit_date).getTime() - new Date(a.last_visit_date).getTime();
       if (dateDiff !== 0) return dateDiff;
@@ -132,10 +153,72 @@ export function getUserRestaurantRankings(
       cuisine: item.restaurant.cuisine,
       city: item.restaurant.city,
       rating: item.rating,
+      average_score: item.average_score,
       review_count_by_user: item.review_count_by_user,
       last_visit_date: item.last_visit_date,
       tags: item.tags,
     }));
+}
+
+/** Category & tag leaderboards — recomputed from reviews on every call. */
+export function getLeaderboardRankings(
+  userId: string,
+  categoryId: RankingCategoryId,
+  reviews: Review[],
+  restaurants: Restaurant[],
+  dishes: Dish[],
+): LeaderboardEntry[] {
+  const rMap = new Map(restaurants.map((r) => [r.id, r]));
+  const byRestaurant = new Map<string, Review[]>();
+
+  reviews
+    .filter((r) => r.userId === userId)
+    .forEach((review) => {
+      const restaurant = rMap.get(review.restaurantId);
+      if (!restaurant) return;
+      if (!reviewMatchesRankingCategory(categoryId, review, restaurant, dishes)) return;
+
+      const arr = byRestaurant.get(review.restaurantId) ?? [];
+      arr.push(review);
+      byRestaurant.set(review.restaurantId, arr);
+    });
+
+  const items = [...byRestaurant.entries()]
+    .map(([restaurantId, userReviews]) => {
+      const restaurant = rMap.get(restaurantId)!;
+      const sorted = [...userReviews].sort(
+        (a, b) => new Date(b.visitDate).getTime() - new Date(a.visitDate).getTime(),
+      );
+      const average_score =
+        userReviews.reduce((s, r) => s + getReviewOverallRating(r), 0) / userReviews.length;
+
+      return {
+        restaurant,
+        average_score: Math.round(average_score * 10) / 10,
+        last_visit_date: sorted[0].visitDate,
+        review_count: userReviews.length,
+      };
+    })
+    .sort((a, b) => {
+      if (b.average_score !== a.average_score) return b.average_score - a.average_score;
+      const dateDiff =
+        new Date(b.last_visit_date).getTime() - new Date(a.last_visit_date).getTime();
+      if (dateDiff !== 0) return dateDiff;
+      return a.restaurant.name.localeCompare(b.restaurant.name);
+    });
+
+  return items.map((item, index) => ({
+    rank: index + 1,
+    restaurant_id: item.restaurant.id,
+    restaurant_name: item.restaurant.name,
+    image_url: item.restaurant.imageUrl,
+    cuisine: item.restaurant.cuisine,
+    city: item.restaurant.city,
+    average_score: item.average_score,
+    last_visit_date: item.last_visit_date,
+    review_count: item.review_count,
+    restaurant: item.restaurant,
+  }));
 }
 
 export function getUserDishRankings(

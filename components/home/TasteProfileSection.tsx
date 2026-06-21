@@ -5,7 +5,8 @@ import { CountUpText } from "@/components/ui/CountUpText";
 import { FadeInView } from "@/components/ui/FadeInView";
 import { formatPrice } from "@/lib/utils";
 import type { TasteDNA } from "@/lib/types";
-import { formatScoreMetric, getTastePersonality } from "@/lib/taste-personality";
+import { formatScoreMetric } from "@/lib/taste-personality";
+import { TastePersonalityCard } from "@/components/taste/TastePersonalityCard";
 import { ui } from "@/constants/ui";
 import { cn } from "@/lib/utils";
 
@@ -46,10 +47,8 @@ export function TasteProfileSection({
   reviewCount: number;
   tasteLabel?: string;
 }) {
-  const topCuisine =
-    dna.favoriteCuisines[0]?.cuisine ?? quizCuisines[0] ?? dna.mostReviewedCuisine ?? "Calculating...";
+  const topCuisine = dna.topCuisine ?? quizCuisines[0] ?? dna.mostReviewedCuisine ?? "Calculating...";
   const budget = dna.preferredPriceLevel ? formatPrice(dna.preferredPriceLevel) : "$$";
-  const personality = tasteLabel ?? getTastePersonality(dna, reviewCount, quizCuisines);
   const adventure = formatScoreMetric(dna.adventureScore, reviewCount, "adventure");
   const hiddenGem = formatScoreMetric(dna.hiddenGemScore, reviewCount, "hidden-gem");
 
@@ -57,10 +56,7 @@ export function TasteProfileSection({
     <FadeInView className="gap-3 px-4">
       <Text className={`text-lg font-semibold ${ui.text.primary}`}>Your Taste Profile</Text>
 
-      <Card className={cn("items-center py-5 px-4 gap-1", ui.accentCard)}>
-        <Text className={`text-xs uppercase tracking-widest font-semibold ${ui.text.muted}`}>You are a</Text>
-        <Text className={`text-2xl font-black ${ui.text.primary}`}>{personality}</Text>
-      </Card>
+      <TastePersonalityCard personality={dna.personality} compact />
 
       <View className="flex-row gap-3">
         <StatCard label="Top Cuisine" value={topCuisine} icon="restaurant-outline" />

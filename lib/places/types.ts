@@ -1,6 +1,6 @@
 import type { Cuisine, PriceLevel } from "@/lib/types";
 
-/** A restaurant from Google Places — not yet in ForkLoop DB until user rates or opens it */
+/** A restaurant from Google Places — not yet in PickyBites DB until user rates or opens it */
 export interface PlaceResult {
   googlePlaceId: string;
   name: string;

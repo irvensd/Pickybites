@@ -1,21 +1,58 @@
-import { Redirect } from "expo-router";
+import { useEffect, useRef } from "react";
 import { View, ActivityIndicator } from "react-native";
+import { useRouter, usePathname } from "expo-router";
+import { brandColors } from "@/constants/branding";
 import { useAppStore } from "@/store/useAppStore";
 
+type EntryRoute = "/onboarding" | "/login" | "/taste-quiz" | "/(tabs)";
+
+function resolveEntryRoute(
+  hasSeenOnboarding: boolean,
+  isAuthenticated: boolean,
+  hasCompletedTasteQuiz: boolean,
+): EntryRoute {
+  if (!hasSeenOnboarding) return "/onboarding";
+  if (!isAuthenticated) return "/login";
+  if (!hasCompletedTasteQuiz) return "/taste-quiz";
+  return "/(tabs)";
+}
+
 export default function Index() {
-  const { hasSeenOnboarding, isAuthenticated, isInitializing, currentUserId, users } = useAppStore();
-  const user = users.find((u) => u.id === currentUserId);
+  const router = useRouter();
+  const pathname = usePathname();
+  const isOnEntryScreen = pathname === "/" || pathname === "/index";
+  const isInitializing = useAppStore((s) => s.isInitializing);
+  const isDataLoaded = useAppStore((s) => s.isDataLoaded);
+  const hasSeenOnboarding = useAppStore((s) => s.hasSeenOnboarding);
+  const isAuthenticated = useAppStore((s) => s.isAuthenticated);
+  const hasCompletedTasteQuiz = useAppStore(
+    (s) => s.users.find((u) => u.id === s.currentUserId)?.hasCompletedTasteQuiz ?? false,
+  );
+  const lastRoute = useRef<EntryRoute | null>(null);
 
-  if (isInitializing) {
-    return (
-      <View className="flex-1 items-center justify-center bg-savr-50 dark:bg-savr-950">
-        <ActivityIndicator size="large" color="#A85D3F" />
-      </View>
-    );
-  }
+  useEffect(() => {
+    if (isInitializing || !isOnEntryScreen) return;
+    // Wait for profile data before deciding taste quiz vs home (avoids false "quiz incomplete").
+    if (isAuthenticated && !isDataLoaded) return;
 
-  if (!hasSeenOnboarding) return <Redirect href="/onboarding" />;
-  if (!isAuthenticated) return <Redirect href="/login" />;
-  if (user && !user.hasCompletedTasteQuiz) return <Redirect href="/taste-quiz" />;
-  return <Redirect href="/(tabs)" />;
+    const target = resolveEntryRoute(hasSeenOnboarding, isAuthenticated, hasCompletedTasteQuiz);
+    if (lastRoute.current === target) return;
+
+    lastRoute.current = target;
+    router.replace(target);
+  }, [
+    isInitializing,
+    isOnEntryScreen,
+    isDataLoaded,
+    hasSeenOnboarding,
+    isAuthenticated,
+    hasCompletedTasteQuiz,
+    router,
+  ]);
+
+  return (
+    <View className="flex-1 items-center justify-center bg-savr-50 dark:bg-savr-950">
+      <ActivityIndicator size="large" color={brandColors.roseDark} />
+    </View>
+  );
 }

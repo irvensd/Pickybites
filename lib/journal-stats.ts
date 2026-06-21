@@ -1,4 +1,5 @@
 import type { Cuisine, Dish, Restaurant, Review } from "./types";
+import { getReviewOverallRating } from "./review-scores";
 
 export type MonthStats = {
   monthKey: string;
@@ -49,12 +50,12 @@ export function getMonthStats(
 
   const newCuisines = new Set(cuisinesThisMonth.filter((c) => !cuisinesBefore.has(c))).size;
 
-  const avg = mine.length ? mine.reduce((s, r) => s + r.rating, 0) / mine.length : 0;
+  const avg = mine.length ? mine.reduce((s, r) => s + getReviewOverallRating(r), 0) / mine.length : 0;
 
   const reviewIds = new Set(mine.map((r) => r.id));
   const monthDishes = dishes.filter((d) => reviewIds.has(d.reviewId));
   const topDish = [...monthDishes].sort((a, b) => b.rating - a.rating)[0];
-  const topReview = [...mine].sort((a, b) => b.rating - a.rating)[0];
+  const topReview = [...mine].sort((a, b) => getReviewOverallRating(b) - getReviewOverallRating(a))[0];
 
   let topMeal: MonthStats["topMeal"] = null;
   if (topDish) {
@@ -67,7 +68,7 @@ export function getMonthStats(
     topMeal = {
       name: rMap.get(topReview.restaurantId)?.name ?? "Top spot",
       restaurantName: rMap.get(topReview.restaurantId)?.name ?? "Restaurant",
-      rating: topReview.rating,
+      rating: getReviewOverallRating(topReview),
     };
   }
 

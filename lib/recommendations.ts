@@ -1,4 +1,5 @@
 import { calculateTasteDNA } from "./taste-dna";
+import { getReviewOverallRating } from "./review-scores";
 import type { Bookmark, Follow, Recommendation, Restaurant, Review, User } from "./types";
 import type { TastePreferences } from "./taste-preferences";
 
@@ -38,14 +39,14 @@ export function getRecommendations(
     const rest = rMap.get(rev.restaurantId);
     if (!rest) return;
     const prev = lovedByCuisine.get(rest.cuisine);
-    if (!prev || rev.rating > prev.rating) {
-      lovedByCuisine.set(rest.cuisine, { name: rest.name, rating: rev.rating });
+    if (!prev || getReviewOverallRating(rev) > prev.rating) {
+      lovedByCuisine.set(rest.cuisine, { name: rest.name, rating: getReviewOverallRating(rev) });
     }
   });
 
   const friendIds = follows.filter((f) => f.followerId === userId).map((f) => f.followingId);
   const friendRestaurants = new Set(
-    reviews.filter((r) => friendIds.includes(r.userId) && r.rating >= 8.5).map((r) => r.restaurantId),
+    reviews.filter((r) => friendIds.includes(r.userId) && getReviewOverallRating(r) >= 8.5).map((r) => r.restaurantId),
   );
 
   const tagAffinity = new Map<string, number>();

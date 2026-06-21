@@ -77,6 +77,9 @@ export function DishRankingCard({
   restaurantName,
   rating,
   isBestDish,
+  photoUrl,
+  visitDate,
+  cuisine,
   onPress,
 }: {
   rank: number;
@@ -84,6 +87,9 @@ export function DishRankingCard({
   restaurantName: string;
   rating: number;
   isBestDish?: boolean;
+  photoUrl?: string | null;
+  visitDate?: string;
+  cuisine?: string;
   onPress: () => void;
 }) {
   const isPodium = rank <= 3;
@@ -91,18 +97,37 @@ export function DishRankingCard({
 
   return (
     <Pressable onPress={onPress}>
-      <Card className={cn("flex-row items-center gap-3 p-4", isPodium && "border-2")} style={isPodium ? { borderColor: `${accent}55` } : undefined}>
-        <Text className="text-3xl font-black w-12" style={{ color: accent ?? "#B8956F" }}>
-          #{rank}
-        </Text>
-        <View className="flex-1 gap-1">
-          <View className="flex-row items-center gap-1.5">
-            <Text className={`font-semibold text-base ${ui.text.primary}`} numberOfLines={1}>{dishName}</Text>
-            {isBestDish ? <Ionicons name="star" size={14} color="#A85D3F" /> : null}
+      <Card className={cn("p-0 overflow-hidden", isPodium && "border-2")} style={isPodium ? { borderColor: `${accent}55` } : undefined}>
+        <View className="flex-row">
+          {photoUrl ? (
+            <Image source={{ uri: photoUrl }} style={{ width: 112, height: 112 }} contentFit="cover" />
+          ) : (
+            <View className={cn("w-28 h-28 items-center justify-center", ui.surface.muted)}>
+              <Ionicons name="fast-food" size={28} color="#A85D3F" />
+            </View>
+          )}
+          <View className="flex-1 p-4 justify-center gap-1.5">
+            <View className="flex-row items-center gap-2">
+              <Text className="text-3xl font-black" style={{ color: accent ?? "#B8956F" }}>
+                #{rank}
+              </Text>
+              {isBestDish ? <Ionicons name="star" size={16} color="#A85D3F" /> : null}
+            </View>
+            <Text className={`text-base font-semibold ${ui.text.primary}`} numberOfLines={1}>
+              {dishName}
+            </Text>
+            <Text className={`text-xs ${ui.text.muted}`} numberOfLines={1}>
+              {restaurantName}
+              {cuisine ? ` · ${cuisine}` : ""}
+            </Text>
+            {visitDate ? (
+              <Text className={`text-xs ${ui.text.faint}`}>Visited {formatDate(visitDate)}</Text>
+            ) : null}
           </View>
-          <Text className={`text-xs ${ui.text.muted}`} numberOfLines={1}>{restaurantName}</Text>
+          <View className="justify-center pr-4">
+            <Rating value={rating} size="lg" />
+          </View>
         </View>
-        <Rating value={rating} size="lg" />
       </Card>
     </Pressable>
   );

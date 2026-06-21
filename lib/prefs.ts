@@ -1,8 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { ThemeMode } from "@/store/useThemeStore";
 
-const ONBOARDING_KEY = "@forkloop/has_seen_onboarding";
-const THEME_KEY = "@forkloop/theme_mode";
+const ONBOARDING_KEY = "@pickybites/has_seen_onboarding";
+const THEME_KEY = "@pickybites/theme_mode";
 
 export async function loadHasSeenOnboarding(): Promise<boolean> {
   const v = await AsyncStorage.getItem(ONBOARDING_KEY);
@@ -13,7 +13,7 @@ export async function saveHasSeenOnboarding(): Promise<void> {
   await AsyncStorage.setItem(ONBOARDING_KEY, "1");
 }
 
-const MAP_REGION_KEY = "@forkloop/map_region";
+const MAP_REGION_KEY = "@pickybites/map_region";
 
 export type SavedMapRegion = {
   latitude: number;
@@ -46,7 +46,7 @@ export async function saveThemeMode(mode: ThemeMode): Promise<void> {
   await AsyncStorage.setItem(THEME_KEY, mode);
 }
 
-const GETTING_STARTED_DISMISSED_KEY = "@forkloop/getting_started_dismissed";
+const GETTING_STARTED_DISMISSED_KEY = "@pickybites/getting_started_dismissed";
 
 export async function loadGettingStartedDismissed(): Promise<boolean> {
   return (await AsyncStorage.getItem(GETTING_STARTED_DISMISSED_KEY)) === "1";

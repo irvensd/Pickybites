@@ -1,8 +1,9 @@
 import type {
   Comment, Dish, Follow, Like, List, ListItem, ListCollaborator,
   Restaurant, Review, ReviewPhoto, ReviewTag, User, Cuisine, PriceLevel,
-  AppNotification, NotificationType, Bookmark,
+  AppNotification, NotificationType, Bookmark, WaitTime,
 } from "@/lib/types";
+import { normalizeCategoryScores } from "@/lib/review-scores";
 
 type DbUser = {
   id: string;
@@ -36,6 +37,14 @@ type DbReview = {
   user_id: string;
   restaurant_id: string;
   rating: number;
+  food_quality?: number | null;
+  service_score?: number | null;
+  atmosphere?: number | null;
+  value_score?: number | null;
+  rating_manual_override?: boolean | null;
+  wait_time?: string | null;
+  would_return?: boolean | null;
+  would_recommend?: boolean | null;
   text: string;
   visit_date: string;
   tags: string[];
@@ -139,11 +148,27 @@ export function mapRestaurant(row: DbRestaurant): Restaurant {
 }
 
 export function mapReview(row: DbReview): Review {
+  const rating = Number(row.rating);
   return {
     id: row.id,
     userId: row.user_id,
     restaurantId: row.restaurant_id,
-    rating: Number(row.rating),
+    rating,
+    categoryScores: normalizeCategoryScores(
+      row.food_quality != null
+        ? {
+            foodQuality: Number(row.food_quality),
+            service: Number(row.service_score ?? row.rating),
+            atmosphere: Number(row.atmosphere ?? row.rating),
+            value: Number(row.value_score ?? row.rating),
+          }
+        : undefined,
+      rating,
+    ),
+    ratingManualOverride: row.rating_manual_override ?? false,
+    waitTime: (row.wait_time as WaitTime | null) ?? null,
+    wouldReturn: row.would_return ?? null,
+    wouldRecommend: row.would_recommend ?? null,
     text: row.text ?? "",
     visitDate: row.visit_date,
     tags: (row.tags ?? []) as ReviewTag[],
@@ -274,10 +299,21 @@ type DbBookmark = {
   place_city: string;
   place_cuisine: string | null;
   place_image_url: string | null;
+  place_price_level: number | null;
   latitude: number | null;
   longitude: number | null;
+  status: string | null;
+  notes: string | null;
+  planned_at: string | null;
+  visited_at: string | null;
   created_at: string;
+  updated_at: string | null;
 };
+
+function mapBucketStatus(raw: string | null | undefined): Bookmark["status"] {
+  if (raw === "planned" || raw === "visited") return raw;
+  return "want_to_try";
+}
 
 export function mapBookmark(row: DbBookmark): Bookmark {
   return {
@@ -289,9 +325,15 @@ export function mapBookmark(row: DbBookmark): Bookmark {
     placeAddress: row.place_address,
     placeCity: row.place_city,
     placeCuisine: (row.place_cuisine as Cuisine) ?? null,
+    placePriceLevel: row.place_price_level != null ? clampPriceLevel(row.place_price_level) : null,
     placeImageUrl: row.place_image_url,
     latitude: row.latitude,
     longitude: row.longitude,
+    status: mapBucketStatus(row.status),
+    reasonSaved: row.notes?.trim() || "Saved to bucket list",
+    plannedAt: row.planned_at,
+    visitedAt: row.visited_at,
     createdAt: row.created_at,
+    updatedAt: row.updated_at ?? row.created_at,
   };
 }

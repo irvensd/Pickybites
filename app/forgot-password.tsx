@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { View, Text, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
 import { router } from "expo-router";
+import { goBackOr } from "@/lib/navigation";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
@@ -51,7 +52,7 @@ export default function ForgotPasswordScreen() {
               <Button label="Send Reset Link" onPress={handleSubmit} loading={loading} />
             </>
           )}
-          <Button label="Back to login" variant="ghost" onPress={() => router.back()} />
+          <Button label="Back to login" variant="ghost" onPress={() => goBackOr("/login")} />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

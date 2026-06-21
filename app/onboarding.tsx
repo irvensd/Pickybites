@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Button } from "@/components/ui/Button";
 import { Logo } from "@/components/ui/Logo";
 import { useAppStore } from "@/store/useAppStore";
+import { brandColors } from "@/constants/branding";
 import { hapticSuccess } from "@/lib/haptics";
 import { routeAfterAuth } from "@/lib/navigation";
 
@@ -37,7 +38,7 @@ export default function Onboarding() {
         <View className="gap-4">
           {slides.map((s) => (
             <View key={s.title} className="flex-row gap-4 bg-white dark:bg-savr-800 rounded-2xl p-4 border border-savr-100 dark:border-savr-700">
-              <Ionicons name={s.icon} size={24} color="#A85D3F" />
+              <Ionicons name={s.icon} size={24} color={brandColors.roseDark} />
               <View className="flex-1">
                 <Text className="font-semibold text-savr-900 dark:text-savr-100">{s.title}</Text>
                 <Text className="text-sm text-savr-500 dark:text-savr-400 mt-0.5">{s.desc}</Text>

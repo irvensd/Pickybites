@@ -12,9 +12,10 @@ import type { PlaceResult } from "@/lib/places/types";
 import * as tier1 from "@/lib/supabase/tier1";
 import { registerForPushNotifications, showLocalNotification } from "@/lib/push";
 import * as tier2 from "@/lib/supabase/tier2";
-import type { Comment, Cuisine, Dish, Follow, Like, List, ListItem, ListCollaborator, Restaurant, Review, ReviewPhoto, ReviewTag, User, AppNotification, Bookmark } from "@/lib/types";
+import type { Comment, Cuisine, Dish, Follow, Like, List, ListItem, ListCollaborator, Restaurant, Review, ReviewPhoto, ReviewTag, ReviewCategoryScores, WaitTime, User, AppNotification, Bookmark } from "@/lib/types";
 import { APP_NAME } from "@/constants/branding";
 import { validateReviewSubmit } from "@/lib/review-validation";
+import { buildStructuredReviewFields } from "@/lib/review-scores";
 import { generateId } from "@/lib/utils";
 import { loadHasSeenOnboarding, saveHasSeenOnboarding } from "@/lib/prefs";
 
@@ -61,6 +62,11 @@ interface AppState {
     cuisine?: Restaurant["cuisine"];
     priceLevel?: Restaurant["priceLevel"];
     rating: number;
+    categoryScores: ReviewCategoryScores;
+    ratingManualOverride?: boolean;
+    waitTime?: WaitTime | null;
+    wouldReturn?: boolean | null;
+    wouldRecommend?: boolean | null;
     text: string;
     visitDate: string;
     tags: ReviewTag[];
@@ -69,7 +75,17 @@ interface AppState {
   }) => Promise<{ reviewId: string; restaurantId: string } | { error: string }>;
   updateReview: (
     reviewId: string,
-    data: { rating: number; text: string; visitDate: string; tags: ReviewTag[] },
+    data: {
+      rating: number;
+      categoryScores: ReviewCategoryScores;
+      ratingManualOverride?: boolean;
+      waitTime?: WaitTime | null;
+      wouldReturn?: boolean | null;
+      wouldRecommend?: boolean | null;
+      text: string;
+      visitDate: string;
+      tags: ReviewTag[];
+    },
   ) => Promise<{ ok: true } | { error: string }>;
   deleteReview: (reviewId: string) => Promise<{ ok: true } | { error: string }>;
   toggleLike: (reviewId: string) => Promise<void>;
@@ -106,6 +122,10 @@ interface AppState {
   isBookmarked: (googlePlaceId: string) => boolean;
   isRestaurantBookmarked: (restaurant: Restaurant) => boolean;
   removeBookmark: (bookmarkId: string) => Promise<void>;
+  updateBookmarkStatus: (
+    bookmarkId: string,
+    status: Bookmark["status"],
+  ) => Promise<{ ok: true; restaurantId: string | null } | { ok: false; error: string }>;
 }
 
 function mockDataState() {
@@ -145,6 +165,8 @@ function emptyDataState() {
 }
 
 let notificationUnsub: (() => void) | null = null;
+let authUnsub: (() => void) | null = null;
+let initStarted = false;
 
 function setupNotificationListener(userId: string) {
   notificationUnsub?.();
@@ -170,6 +192,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   unreadNotificationCount: () => get().notifications.filter((n) => !n.read).length,
 
   initialize: async () => {
+    if (initStarted) return;
+    initStarted = true;
+
     const useSupabase = isSupabaseConfigured();
     set({ useSupabase, isInitializing: true, isDataLoaded: !useSupabase });
 
@@ -185,21 +210,27 @@ export const useAppStore = create<AppState>((set, get) => ({
       const userId = await supabaseApi.getSessionUserId();
       if (userId) {
         set({ isAuthenticated: true, currentUserId: userId });
-        void supabaseApi.fetchAllData(userId)
-          .then((data) => {
-            set({ ...data, isDataLoaded: true });
-            setupNotificationListener(userId);
-            get().registerPush();
-          })
-          .catch((e) => console.error("Background data load failed:", e));
+        try {
+          const data = await supabaseApi.fetchAllData(userId);
+          set({ ...data, isDataLoaded: true });
+          setupNotificationListener(userId);
+          get().registerPush();
+        } catch (e) {
+          console.error("Initial data load failed:", e);
+          set({ isDataLoaded: true });
+        }
+      } else {
+        set({ isDataLoaded: true });
       }
     } catch (e) {
       console.error("Init failed:", e);
+      set({ isDataLoaded: true });
     } finally {
       set({ isInitializing: false });
     }
 
-    supabaseApi.subscribeToAuth(async (userId) => {
+    authUnsub?.();
+    authUnsub = supabaseApi.subscribeToAuth(async (userId) => {
       if (!userId) {
         notificationUnsub?.();
         notificationUnsub = null;
@@ -277,7 +308,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const userId = await supabaseApi.signIn(email, password);
       const data = await supabaseApi.fetchAllData(userId);
-      set({ isAuthenticated: true, currentUserId: userId, ...data });
+      set({ isAuthenticated: true, currentUserId: userId, ...data, isDataLoaded: true });
       setupNotificationListener(userId);
       get().registerPush();
       return { ok: true };
@@ -309,7 +340,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         if (userId) userId = await supabaseApi.signIn(DEMO_EMAIL, DEMO_PASSWORD);
       }
       const data = await supabaseApi.fetchAllData(userId);
-      set({ isAuthenticated: true, currentUserId: userId, ...data });
+      set({ isAuthenticated: true, currentUserId: userId, ...data, isDataLoaded: true });
       if (userId) {
         setupNotificationListener(userId);
         get().registerPush();
@@ -337,7 +368,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const userId = await supabaseApi.signUp(data);
       const allData = await supabaseApi.fetchAllData(userId);
-      set({ isAuthenticated: true, currentUserId: userId, ...allData });
+      set({ isAuthenticated: true, currentUserId: userId, ...allData, isDataLoaded: true });
       if (userId) {
         setupNotificationListener(userId);
         get().registerPush();
@@ -402,6 +433,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       restaurantName: data.restaurantName ?? data.place?.name,
       placeName: data.place?.name,
       rating: data.rating,
+      categoryScores: data.categoryScores,
+      ratingManualOverride: data.ratingManualOverride,
+      waitTime: data.waitTime,
+      wouldReturn: data.wouldReturn,
+      wouldRecommend: data.wouldRecommend,
       text: data.text,
       visitDate: data.visitDate,
       cuisine: data.cuisine ?? data.place?.cuisine,
@@ -417,10 +453,20 @@ export const useAppStore = create<AppState>((set, get) => ({
     });
     if (!validation.ok) return { error: validation.error };
 
+    const structured = buildStructuredReviewFields({
+      rating: data.rating,
+      categoryScores: data.categoryScores,
+      ratingManualOverride: data.ratingManualOverride,
+      waitTime: data.waitTime,
+      wouldReturn: data.wouldReturn,
+      wouldRecommend: data.wouldRecommend,
+    });
+
     if (get().useSupabase) {
       try {
         const result = await supabaseApi.createReview(uid, {
           ...data,
+          ...structured,
           photoUris: data.photoUris ?? [],
         });
         set((s) => ({
@@ -430,6 +476,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           reviews: [result.review, ...s.reviews],
           dishes: [...result.dishes, ...s.dishes],
           reviewPhotos: [...result.reviewPhotos, ...s.reviewPhotos],
+          isDataLoaded: true,
         }));
         return { reviewId: result.reviewId, restaurantId: result.restaurantId };
       } catch (e) {
@@ -451,8 +498,14 @@ export const useAppStore = create<AppState>((set, get) => ({
       createdAt: new Date().toISOString(),
     };
     const review: Review = {
-      id: reviewId, userId: uid, restaurantId, rating: data.rating, text: data.text,
-      visitDate: data.visitDate, tags: data.tags, createdAt: new Date().toISOString(),
+      id: reviewId,
+      userId: uid,
+      restaurantId,
+      ...structured,
+      text: data.text,
+      visitDate: data.visitDate,
+      tags: data.tags,
+      createdAt: new Date().toISOString(),
     };
     const newDishes = data.dishes.map((d) => ({
       ...d, id: generateId("dish"), reviewId, restaurantId, createdAt: new Date().toISOString(),
@@ -461,6 +514,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       restaurants: [...s.restaurants, restaurant],
       reviews: [...s.reviews, review],
       dishes: [...s.dishes, ...newDishes],
+      isDataLoaded: true,
     }));
     return { reviewId, restaurantId };
   },
@@ -471,9 +525,18 @@ export const useAppStore = create<AppState>((set, get) => ({
     const existing = get().reviews.find((r) => r.id === reviewId && r.userId === uid);
     if (!existing) return { error: "Review not found" };
 
+    const structured = buildStructuredReviewFields({
+      rating: data.rating,
+      categoryScores: data.categoryScores,
+      ratingManualOverride: data.ratingManualOverride,
+      waitTime: data.waitTime,
+      wouldReturn: data.wouldReturn,
+      wouldRecommend: data.wouldRecommend,
+    });
+
     if (get().useSupabase) {
       try {
-        const updated = await supabaseApi.updateReviewDb(uid, reviewId, data);
+        const updated = await supabaseApi.updateReviewDb(uid, reviewId, { ...data, ...structured });
         set((s) => ({
           reviews: s.reviews.map((r) => (r.id === reviewId ? updated : r)),
         }));
@@ -485,7 +548,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     set((s) => ({
       reviews: s.reviews.map((r) =>
-        r.id === reviewId ? { ...r, ...data } : r,
+        r.id === reviewId ? { ...r, ...structured, text: data.text, visitDate: data.visitDate, tags: data.tags } : r,
       ),
     }));
     return { ok: true };
@@ -756,9 +819,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   markNotificationsRead: async () => {
     const uid = get().currentUserId;
     if (!uid) return;
+    const hasUnread = get().notifications.some((n) => !n.read);
+    if (!hasUnread) return;
     if (get().useSupabase) await tier1.markNotificationsRead(uid);
     set((s) => ({
-      notifications: s.notifications.map((n) => ({ ...n, read: true })),
+      notifications: s.notifications.map((n) => (n.read ? n : { ...n, read: true })),
     }));
   },
 
@@ -961,10 +1026,16 @@ export const useAppStore = create<AppState>((set, get) => ({
       placeAddress: place.address,
       placeCity: place.city,
       placeCuisine: place.cuisine,
+      placePriceLevel: place.priceLevel ?? null,
       placeImageUrl: place.imageUrl,
       latitude: place.latitude,
       longitude: place.longitude,
+      status: "want_to_try",
+      reasonSaved: "Saved from Discover",
+      plannedAt: null,
+      visitedAt: null,
       createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
     set((s) => ({ bookmarks: [tempBookmark, ...s.bookmarks] }));
 
@@ -990,10 +1061,16 @@ export const useAppStore = create<AppState>((set, get) => ({
       placeAddress: place.address,
       placeCity: place.city,
       placeCuisine: place.cuisine,
+      placePriceLevel: place.priceLevel ?? null,
       placeImageUrl: place.imageUrl,
       latitude: place.latitude,
       longitude: place.longitude,
+      status: "want_to_try",
+      reasonSaved: "Saved from Discover",
+      plannedAt: null,
+      visitedAt: null,
       createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
     set((s) => ({
       bookmarks: [bookmark, ...s.bookmarks.filter((b) => b.id !== tempBookmark.id)],
@@ -1041,10 +1118,16 @@ export const useAppStore = create<AppState>((set, get) => ({
       placeAddress: restaurant.address,
       placeCity: restaurant.city,
       placeCuisine: restaurant.cuisine,
+      placePriceLevel: restaurant.priceLevel ?? null,
       placeImageUrl: restaurant.imageUrl,
       latitude: restaurant.latitude ?? null,
       longitude: restaurant.longitude ?? null,
+      status: "want_to_try",
+      reasonSaved: "Saved to bucket list",
+      plannedAt: null,
+      visitedAt: null,
       createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
     set((s) => ({ bookmarks: [bookmark, ...s.bookmarks] }));
     return { ok: true };
@@ -1060,5 +1143,44 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
     }
     set((s) => ({ bookmarks: s.bookmarks.filter((b) => b.id !== bookmarkId) }));
+  },
+
+  updateBookmarkStatus: async (bookmarkId, status) => {
+    const bookmark = get().bookmarks.find((b) => b.id === bookmarkId);
+    if (!bookmark) return { ok: false, error: "Bookmark not found" };
+
+    const now = new Date().toISOString();
+    const patch: Partial<Bookmark> = {
+      status,
+      updatedAt: now,
+      ...(status === "planned" ? { plannedAt: now } : {}),
+      ...(status === "visited" ? { visitedAt: now } : {}),
+    };
+
+    const previous = bookmark;
+    set((s) => ({
+      bookmarks: s.bookmarks.map((b) => (b.id === bookmarkId ? { ...b, ...patch } : b)),
+    }));
+
+    if (get().useSupabase) {
+      try {
+        const updated = await tier2.updateBookmarkDb(bookmarkId, {
+          status,
+          plannedAt: status === "planned" ? now : undefined,
+          visitedAt: status === "visited" ? now : undefined,
+        });
+        set((s) => ({
+          bookmarks: s.bookmarks.map((b) => (b.id === bookmarkId ? updated : b)),
+        }));
+      } catch (e) {
+        set((s) => ({
+          bookmarks: s.bookmarks.map((b) => (b.id === bookmarkId ? previous : b)),
+        }));
+        return { ok: false, error: e instanceof Error ? e.message : "Could not update status" };
+      }
+    }
+
+    const current = get().bookmarks.find((b) => b.id === bookmarkId)!;
+    return { ok: true, restaurantId: current.restaurantId };
   },
 }));

@@ -1,7 +1,7 @@
 import { View, Text, Pressable, TextInput, Alert } from "react-native";
 import { Image } from "expo-image";
-import { memo, useCallback, useState } from "react";
-import { router } from "expo-router";
+import { memo, useMemo, useState } from "react";
+import { router, usePathname } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppStore } from "@/store/useAppStore";
 import type { Review } from "@/lib/types";
@@ -9,6 +9,8 @@ import { formatDate, formatRelative } from "@/lib/utils";
 import { Card } from "@/components/ui/Card";
 import { Avatar } from "@/components/ui/Avatar";
 import { Rating } from "@/components/ui/Rating";
+import { ReviewScoreSummary } from "@/components/reviews/ReviewScoreSummary";
+import { getReviewOverallRating } from "@/lib/review-scores";
 import { Tag } from "@/components/ui/Tag";
 import { Button } from "@/components/ui/Button";
 import { hapticLight, hapticSuccess } from "@/lib/haptics";
@@ -17,9 +19,9 @@ import { useThemedColors } from "@/lib/useThemedColors";
 import { ui } from "@/constants/ui";
 import { cn } from "@/lib/utils";
 
-type ReviewCardProps = { review: Review; showRestaurant?: boolean };
+type ReviewCardProps = { review: Review; showRestaurant?: boolean; showAuthorLink?: boolean };
 
-function ReviewCardInner({ review, showRestaurant = true }: ReviewCardProps) {
+function ReviewCardInner({ review, showRestaurant = true, showAuthorLink = true }: ReviewCardProps) {
   const currentUserId = useAppStore((s) => s.currentUserId);
   const user = useAppStore((s) => s.users.find((u) => u.id === review.userId));
   const restaurant = useAppStore((s) =>
@@ -34,23 +36,29 @@ function ReviewCardInner({ review, showRestaurant = true }: ReviewCardProps) {
   const addComment = useAppStore((s) => s.addComment);
   const deleteReview = useAppStore((s) => s.deleteReview);
   const getUser = useAppStore((s) => s.getUser);
+  const allComments = useAppStore((s) => s.comments);
 
   const [showComments, setShowComments] = useState(false);
   const [comment, setComment] = useState("");
-  const commentCount = useAppStore((s) => s.comments.filter((c) => c.reviewId === review.id).length);
-  const previewComment = useAppStore((s) => s.comments.find((c) => c.reviewId === review.id));
-  const comments = useAppStore(
-    useCallback(
-      (s) => (showComments ? s.comments.filter((c) => c.reviewId === review.id) : []),
-      [review.id, showComments],
-    ),
+  const reviewComments = useMemo(
+    () => allComments.filter((c) => c.reviewId === review.id),
+    [allComments, review.id],
   );
+  const commentCount = reviewComments.length;
+  const previewComment = reviewComments[0];
 
   const colors = useThemedColors();
+  const pathname = usePathname();
   const imageUrl = photo?.url ?? restaurant?.imageUrl;
   const isOwn = review.userId === currentUserId;
 
   if (!user) return null;
+
+  const authorProfilePath = `/user/${user.id}`;
+  const openAuthorProfile = () => {
+    if (!showAuthorLink || pathname === authorProfilePath) return;
+    router.push({ pathname: "/user/[id]", params: { id: user.id } });
+  };
 
   const handleLike = () => {
     toggleLike(review.id);
@@ -81,13 +89,18 @@ function ReviewCardInner({ review, showRestaurant = true }: ReviewCardProps) {
       )}
       <View className="px-4 pb-4 gap-3">
         <View className="flex-row items-center gap-3">
-          <Pressable onPress={() => router.push(`/user/${user.id}`)}><Avatar name={user.displayName} src={user.avatarUrl} /></Pressable>
+          <Pressable onPress={openAuthorProfile} disabled={!showAuthorLink}>
+            <Avatar name={user.displayName} src={user.avatarUrl} />
+          </Pressable>
           <View className="flex-1">
-            <Pressable onPress={() => router.push(`/user/${user.id}`)}><Text className="font-semibold text-savr-900 dark:text-savr-100">{user.displayName}</Text></Pressable>
+            <Pressable onPress={openAuthorProfile} disabled={!showAuthorLink}>
+              <Text className="font-semibold text-savr-900 dark:text-savr-100">{user.displayName}</Text>
+            </Pressable>
             <Text className="text-xs text-savr-500 dark:text-savr-400">{formatRelative(review.createdAt)}</Text>
           </View>
-          <Rating value={review.rating} size="sm" />
+          <Rating value={getReviewOverallRating(review)} size="sm" />
         </View>
+        <ReviewScoreSummary review={review} compact />
         {showRestaurant && restaurant && (
           <Pressable onPress={() => router.push(`/restaurant/${restaurant.id}`)}>
             <Text className="font-semibold text-savr-900 dark:text-savr-100">{restaurant.name}</Text>
@@ -126,7 +139,7 @@ function ReviewCardInner({ review, showRestaurant = true }: ReviewCardProps) {
           </Pressable>
           {restaurant && (
             <Pressable
-              onPress={() => shareReview(user.displayName, restaurant.id, restaurant.name, review.rating, review.text)}
+              onPress={() => shareReview(user.displayName, restaurant.id, restaurant.name, getReviewOverallRating(review), review.text)}
               className="flex-row items-center gap-1.5 min-h-[44px]"
             >
               <Ionicons name="share-outline" size={20} color={colors.icon} />
@@ -148,7 +161,7 @@ function ReviewCardInner({ review, showRestaurant = true }: ReviewCardProps) {
         </View>
         {showComments && (
           <View className="gap-2">
-            {comments.map((c) => {
+            {reviewComments.map((c) => {
               const cu = getUser(c.userId);
               return (
                 <View key={c.id} className="flex-row gap-2">

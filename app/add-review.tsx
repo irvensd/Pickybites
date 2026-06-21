@@ -12,15 +12,20 @@ import { Card } from "@/components/ui/Card";
 import { PlaceSearch } from "@/components/restaurants/PlaceSearch";
 import { VisitDatePicker } from "@/components/reviews/VisitDatePicker";
 import { StepProgress } from "@/components/reviews/StepProgress";
-import { Rating } from "@/components/ui/Rating";
+import {
+  StructuredRatingForm,
+  createStructuredRatingState,
+  type StructuredRatingState,
+} from "@/components/reviews/StructuredRatingForm";
 import { getCurrentCoordinates } from "@/lib/location";
 import { Ionicons } from "@expo/vector-icons";
 import { validateReviewSubmit } from "@/lib/review-validation";
+import { goBackOr } from "@/lib/navigation";
 import { ui } from "@/constants/ui";
 
 const MAX_REVIEW_TEXT = 500;
 
-const STEPS = ["Restaurant", "Rating", "Favorite Dish", "Photos", "Tags", "Review"];
+const STEPS = ["Restaurant", "Ratings", "Favorite Dish", "Photos", "Tags", "Review"];
 
 interface DishForm {
   name: string;
@@ -51,7 +56,20 @@ export default function AddReviewScreen() {
   );
   const [selectedPlace, setSelectedPlace] = useState<PlaceResult | null>(null);
   const [coords, setCoords] = useState<Awaited<ReturnType<typeof getCurrentCoordinates>>>(null);
-  const [rating, setRating] = useState(editingReview?.rating ?? 8);
+  const [ratingState, setRatingState] = useState<StructuredRatingState>(() =>
+    createStructuredRatingState(
+      editingReview
+        ? {
+            categoryScores: editingReview.categoryScores,
+            rating: editingReview.rating,
+            ratingManualOverride: editingReview.ratingManualOverride,
+            waitTime: editingReview.waitTime,
+            wouldReturn: editingReview.wouldReturn,
+            wouldRecommend: editingReview.wouldRecommend,
+          }
+        : undefined,
+    ),
+  );
   const [text, setText] = useState(editingReview?.text ?? "");
   const [visitDate, setVisitDate] = useState(editingReview?.visitDate ?? new Date().toISOString().split("T")[0]);
   const [tags, setTags] = useState<ReviewTag[]>(editingReview?.tags ?? []);
@@ -93,7 +111,17 @@ export default function AddReviewScreen() {
     setLoading(true);
 
     if (isEditMode && editingReview) {
-      const result = await updateReview(editingReview.id, { rating, text, visitDate, tags });
+      const result = await updateReview(editingReview.id, {
+        rating: ratingState.rating,
+        categoryScores: ratingState.categoryScores,
+        ratingManualOverride: ratingState.ratingManualOverride,
+        waitTime: ratingState.waitTime,
+        wouldReturn: ratingState.wouldReturn,
+        wouldRecommend: ratingState.wouldRecommend,
+        text,
+        visitDate,
+        tags,
+      });
       setLoading(false);
       if ("error" in result) {
         Alert.alert("Could not save", result.error);
@@ -108,7 +136,12 @@ export default function AddReviewScreen() {
       restaurantId: selectedRestaurantId ?? undefined,
       placeName: selectedPlace?.name,
       restaurantName: selectedRestaurant?.name,
-      rating,
+      rating: ratingState.rating,
+      categoryScores: ratingState.categoryScores,
+      ratingManualOverride: ratingState.ratingManualOverride,
+      waitTime: ratingState.waitTime,
+      wouldReturn: ratingState.wouldReturn,
+      wouldRecommend: ratingState.wouldRecommend,
       text,
       visitDate,
       cuisine: selectedRestaurant?.cuisine ?? selectedPlace?.cuisine,
@@ -123,6 +156,7 @@ export default function AddReviewScreen() {
       })),
     });
     if (!validation.ok) {
+      setLoading(false);
       Alert.alert("Review incomplete", validation.error);
       return;
     }
@@ -131,7 +165,12 @@ export default function AddReviewScreen() {
     const result = await addReview({
       restaurantId: selectedRestaurantId ?? undefined,
       place: selectedPlace ?? undefined,
-      rating,
+      rating: ratingState.rating,
+      categoryScores: ratingState.categoryScores,
+      ratingManualOverride: ratingState.ratingManualOverride,
+      waitTime: ratingState.waitTime,
+      wouldReturn: ratingState.wouldReturn,
+      wouldRecommend: ratingState.wouldRecommend,
       text,
       visitDate,
       tags,
@@ -160,6 +199,7 @@ export default function AddReviewScreen() {
 
   const next = () => setStep((s) => Math.min(STEPS.length, s + 1));
   const back = () => setStep((s) => Math.max(1, s - 1));
+  const exitReview = () => goBackOr("/(tabs)");
 
   if (isEditMode) {
     return (
@@ -168,16 +208,7 @@ export default function AddReviewScreen() {
         <Card className="gap-2">
           <Text className={`font-semibold text-lg ${ui.text.primary}`}>{selectedRestaurant?.name}</Text>
         </Card>
-        <Text className={`text-sm font-medium ${ui.text.secondary}`}>Your rating: {rating.toFixed(1)}</Text>
-        <View className="flex-row items-center gap-4">
-          <Pressable onPress={() => setRating(Math.max(1, rating - 0.1))} className={`w-12 h-12 rounded-xl items-center justify-center ${ui.surface.muted}`}>
-            <Text className={`text-xl ${ui.text.primary}`}>−</Text>
-          </Pressable>
-          <Rating value={rating} size="lg" />
-          <Pressable onPress={() => setRating(Math.min(10, rating + 0.1))} className={`w-12 h-12 rounded-xl items-center justify-center ${ui.surface.muted}`}>
-            <Text className={`text-xl ${ui.text.primary}`}>+</Text>
-          </Pressable>
-        </View>
+        <StructuredRatingForm value={ratingState} onChange={setRatingState} />
         <Input label="Review" value={text} onChangeText={setText} multiline numberOfLines={4} placeholder="What did you think?" />
         <VisitDatePicker value={visitDate} onChange={setVisitDate} />
         <View className="flex-row flex-wrap gap-2">
@@ -217,23 +248,13 @@ export default function AddReviewScreen() {
             </Card>
           )}
           <Button label="Continue" onPress={() => (hasSelection ? next() : Alert.alert("Pick a restaurant", "Search and select a spot first."))} />
+          <Button label="Skip for now" variant="ghost" onPress={exitReview} />
         </View>
       )}
 
       {step === 2 && (
         <View className="gap-5">
-          <Text className={`text-2xl font-bold ${ui.text.primary}`}>Overall rating</Text>
-          <View className="items-center gap-4 py-4">
-            <Text className="text-5xl font-black text-savr-700 dark:text-savr-200">{rating.toFixed(1)}</Text>
-            <View className="flex-row items-center gap-6">
-              <Pressable onPress={() => setRating(Math.max(1, rating - 0.1))} className={`w-14 h-14 rounded-2xl items-center justify-center ${ui.surface.muted}`}>
-                <Text className={`text-2xl ${ui.text.primary}`}>−</Text>
-              </Pressable>
-              <Pressable onPress={() => setRating(Math.min(10, rating + 0.1))} className={`w-14 h-14 rounded-2xl items-center justify-center ${ui.surface.muted}`}>
-                <Text className={`text-2xl ${ui.text.primary}`}>+</Text>
-              </Pressable>
-            </View>
-          </View>
+          <StructuredRatingForm value={ratingState} onChange={setRatingState} />
           <View className="flex-row gap-3">
             <Button label="Back" variant="secondary" onPress={back} className="flex-1" />
             <Button label="Continue" onPress={next} className="flex-1" />
@@ -244,7 +265,7 @@ export default function AddReviewScreen() {
       {step === 3 && (
         <View className="gap-4">
           <Text className={`text-2xl font-bold ${ui.text.primary}`}>Favorite dish</Text>
-          <Text className={`text-sm ${ui.text.secondary}`}>What was the standout plate?</Text>
+          <Text className={`text-sm ${ui.text.secondary}`}>Optional — skip if you are rating the restaurant only.</Text>
           <Input
             value={dishes[0].name}
             onChangeText={(v) => setDishes([{ ...dishes[0], name: v }])}
@@ -257,7 +278,7 @@ export default function AddReviewScreen() {
           />
           <View className="flex-row gap-3">
             <Button label="Back" variant="secondary" onPress={back} className="flex-1" />
-            <Button label="Continue" onPress={next} className="flex-1" />
+            <Button label={dishes[0].name.trim() ? "Continue" : "Skip"} onPress={next} className="flex-1" />
           </View>
         </View>
       )}

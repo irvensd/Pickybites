@@ -1,32 +1,32 @@
 {
   "expo": {
-    "name": "ForkLoop",
-    "slug": "forkloop",
+    "name": "PickyBites",
+    "slug": "pickybites",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/logo.png",
-    "scheme": "forkloop",
+    "scheme": "pickybites",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": false,
     "splash": {
       "image": "./assets/images/logo.png",
       "resizeMode": "contain",
-      "backgroundColor": "#FAFAF8"
+      "backgroundColor": "#FAFAFA"
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.forkloop.app"
+      "bundleIdentifier": "com.pickybites.app"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#A85D3F",
+        "backgroundColor": "#C96B75",
         "foregroundImage": "./assets/images/logo.png"
       },
-      "package": "com.forkloop.app",
+      "package": "com.pickybites.app",
       "intentFilters": [
         {
           "action": "VIEW",
-          "data": [{ "scheme": "forkloop" }],
+          "data": [{ "scheme": "pickybites" }],
           "category": ["BROWSABLE", "DEFAULT"]
         }
       ],
@@ -41,13 +41,13 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "ForkLoop needs access to your photos to attach food images to reviews."
+          "photosPermission": "PickyBites needs access to your photos to attach food images to reviews."
         }
       ],
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "ForkLoop uses your location to find restaurants near you."
+          "locationWhenInUsePermission": "PickyBites uses your location to find restaurants near you."
         }
       ],
       "expo-asset",
@@ -57,7 +57,7 @@
         "expo-notifications",
         {
           "icon": "./assets/images/logo.png",
-          "color": "#A85D3F"
+          "color": "#C96B75"
         }
       ]
     ],

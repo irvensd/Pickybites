@@ -18,7 +18,8 @@ export function useTasteDna() {
   return {
     dna,
     legacy: dna?.legacy ?? null,
-    tasteLabel: dna?.taste_label ?? "New Explorer",
+    tasteLabel: dna?.food_personality ?? "New Explorer",
+    personality: dna?.legacy?.personality ?? null,
     topCuisine: dna?.top_cuisine ?? "Not enough reviews yet",
     isLoading: !isDataLoaded,
     isEmpty: !dna || dna.total_reviews === 0,

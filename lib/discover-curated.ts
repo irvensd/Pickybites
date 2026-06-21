@@ -1,4 +1,5 @@
 import type { Bookmark, Restaurant, Review } from "./types";
+import { getReviewOverallRating } from "./review-scores";
 
 export type DiscoverTab =
   | "for-you"
@@ -20,7 +21,7 @@ export const DISCOVER_TABS: { value: DiscoverTab; label: string }[] = [
 function avgRating(reviews: Review[], restaurantId: string) {
   const rs = reviews.filter((r) => r.restaurantId === restaurantId);
   if (!rs.length) return 0;
-  return rs.reduce((s, r) => s + r.rating, 0) / rs.length;
+  return rs.reduce((s, r) => s + getReviewOverallRating(r), 0) / rs.length;
 }
 
 export function filterRestaurantsForTab(
@@ -69,10 +70,10 @@ export function filterRestaurantsForTab(
         const userReview = reviews.find((rev) => rev.userId === userId && rev.restaurantId === r.id);
         const community = reviews.filter((rev) => rev.restaurantId === r.id);
         const avg = community.length
-          ? community.reduce((s, rev) => s + rev.rating, 0) / community.length
+          ? community.reduce((s, rev) => s + getReviewOverallRating(rev), 0) / community.length
           : 0;
         const tagged = community.some((rev) => rev.tags.includes("Worth Traveling For"));
-        const highRated = avg >= 9 || (userReview?.rating ?? 0) >= 9;
+        const highRated = avg >= 9 || (userReview ? getReviewOverallRating(userReview) : 0) >= 9;
         if (!highRated && !tagged) return false;
         if (!opts?.userCoords || r.latitude == null || r.longitude == null) return highRated || tagged;
         const miles =

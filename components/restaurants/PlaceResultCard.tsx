@@ -11,7 +11,6 @@ import { getCommunityRating, getRestaurantCommunityTags } from "@/lib/restaurant
 import { formatPrice, formatDistance, cn } from "@/lib/utils";
 import { useThemedColors } from "@/lib/useThemedColors";
 import { ui } from "@/constants/ui";
-import { FadeInView } from "@/components/ui/FadeInView";
 
 export const PlaceResultCard = memo(function PlaceResultCard({
   place,
@@ -60,8 +59,7 @@ export const PlaceResultCard = memo(function PlaceResultCard({
     : [];
 
   return (
-    <FadeInView delay={index * 60}>
-      <Pressable onPress={onPress}>
+    <Pressable onPress={onPress}>
         <Card className="p-0 overflow-hidden">
           {place.imageUrl ? (
             <Image source={{ uri: place.imageUrl }} style={{ width: "100%", height: 132 }} contentFit="cover" />
@@ -118,6 +116,5 @@ export const PlaceResultCard = memo(function PlaceResultCard({
           </View>
         </Card>
       </Pressable>
-    </FadeInView>
   );
 });

@@ -6,7 +6,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAppStore } from "@/store/useAppStore";
 import { calculateTasteDNA } from "@/lib/taste-dna";
 import { getRestaurantRankings } from "@/lib/rankings";
-import { getTastePersonality } from "@/lib/taste-personality";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { FadeInView } from "@/components/ui/FadeInView";
@@ -25,8 +24,12 @@ export default function TasteUnlockedScreen() {
   );
 
   const reviewCount = reviews.filter((r) => r.userId === currentUserId).length;
-  const personality = dna ? getTastePersonality(dna, reviewCount, user?.favoriteCuisines ?? []) : "Beginner Explorer";
-  const topCuisine = dna?.favoriteCuisines[0]?.cuisine ?? user?.favoriteCuisines[0] ?? "—";
+  const personality = dna?.personality ?? {
+    label: "New Explorer" as const,
+    headline: "You are a New Explorer",
+    explanation: "Write a few more reviews and your food personality will take shape automatically.",
+  };
+  const topCuisine = dna?.topCuisine ?? user?.favoriteCuisines[0] ?? "—";
   const firstRank = currentUserId
     ? getRestaurantRankings(currentUserId, reviews, restaurants, {}, 1)[0]
     : undefined;
@@ -49,8 +52,9 @@ export default function TasteUnlockedScreen() {
 
         <FadeInView delay={120} className="w-full gap-4">
           <Card className={cn("p-5 gap-2 items-center", ui.accentCard)}>
-            <Text className={`text-xs uppercase tracking-widest font-semibold ${ui.text.muted}`}>First taste label</Text>
-            <Text className={`text-2xl font-black ${ui.text.primary}`}>{personality}</Text>
+            <Text className={`text-xs uppercase tracking-widest font-semibold ${ui.text.muted}`}>Food personality</Text>
+            <Text className={`text-2xl font-black text-center ${ui.text.primary}`}>{personality.headline}</Text>
+            <Text className={`text-sm text-center leading-5 ${ui.text.secondary}`}>{personality.explanation}</Text>
           </Card>
 
           <Card className="p-5 gap-2">

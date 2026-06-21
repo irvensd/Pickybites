@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Text, ScrollView, KeyboardAvoidingView, Platform, Pressable, Image, Alert, View } from "react-native";
 import { router } from "expo-router";
+import { goBackOr } from "@/lib/navigation";
 import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppStore } from "@/store/useAppStore";
@@ -30,7 +31,7 @@ export default function EditProfileScreen() {
     });
     setLoading(false);
     if (!result.ok) Alert.alert("Could not save", result.error);
-    else router.back();
+    else goBackOr("/settings");
   };
 
   return (

@@ -1,11 +1,18 @@
-import type { Dish, Restaurant, Review, ReviewPhoto, ReviewTag } from "./types";
+import type { Dish, Restaurant, Review, ReviewPhoto, ReviewTag, ReviewCategoryScores, WaitTime } from "./types";
+import { getReviewOverallRating } from "./review-scores";
 
 export type FoodJournalEntry = {
   review_id: string;
+  restaurant_id: string;
   restaurant_name: string;
   cuisine: string;
   city: string;
   rating: number;
+  category_scores: ReviewCategoryScores;
+  rating_manual_override: boolean;
+  wait_time: WaitTime | null;
+  would_return: boolean | null;
+  would_recommend: boolean | null;
   visit_date: string;
   review_text: string;
   tags: ReviewTag[];
@@ -31,7 +38,7 @@ export type FoodJournalMonth = {
 };
 
 export const FOOD_JOURNAL_EMPTY =
-  "No food memories yet. Your first review starts your journal.";
+  "No food memories yet. Write your first review to start your timeline.";
 
 function monthKey(date: string) {
   const d = new Date(date);
@@ -73,7 +80,7 @@ export function getFoodJournal(
         monthReviews.map((r) => rMap.get(r.restaurantId)?.cuisine).filter(Boolean),
       );
       const avg =
-        monthReviews.reduce((s, r) => s + r.rating, 0) / Math.max(monthReviews.length, 1);
+        monthReviews.reduce((s, r) => s + getReviewOverallRating(r), 0) / Math.max(monthReviews.length, 1);
 
       const entries: FoodJournalEntry[] = monthReviews.map((review) => {
         const restaurant = rMap.get(review.restaurantId);
@@ -82,10 +89,16 @@ export function getFoodJournal(
 
         return {
           review_id: review.id,
+          restaurant_id: review.restaurantId,
           restaurant_name: restaurant?.name ?? "Unknown",
           cuisine: restaurant?.cuisine ?? "Unknown",
           city: restaurant?.city ?? "",
-          rating: review.rating,
+          rating: getReviewOverallRating(review),
+          category_scores: review.categoryScores,
+          rating_manual_override: review.ratingManualOverride,
+          wait_time: review.waitTime,
+          would_return: review.wouldReturn,
+          would_recommend: review.wouldRecommend,
           visit_date: review.visitDate,
           review_text: review.text,
           tags: review.tags,

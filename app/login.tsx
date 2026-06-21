@@ -56,7 +56,7 @@ export default function Login() {
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} className="flex-1">
         <ScrollView contentContainerClassName="px-6 py-8 gap-4" keyboardShouldPersistTaps="handled">
           <View className="items-center mb-4 mt-4">
-            <Logo size="lg" />
+            <Logo size="lg" showName showTagline />
             <Text className="text-3xl font-bold text-savr-900 dark:text-savr-100 mt-3">Welcome back</Text>
             <Text className="text-savr-600 dark:text-savr-400 text-center mt-1">Log in to continue your taste journey.</Text>
           </View>

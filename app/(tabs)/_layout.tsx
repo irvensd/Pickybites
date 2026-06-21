@@ -102,12 +102,6 @@ export default function TabLayout() {
           ),
         }}
       />
-      <Tabs.Screen
-        name="rankings"
-        options={{
-          href: null,
-        }}
-      />
     </Tabs>
   );
 }

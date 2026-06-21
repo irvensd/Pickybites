@@ -6,10 +6,11 @@ import {
 import { uploadReviewPhoto } from "./storage";
 import type {
   Comment, Dish, Follow, Like, List, ListItem, ListCollaborator,
-  Restaurant, Review, ReviewPhoto, ReviewTag, User, AppNotification, Bookmark,
+  Restaurant, Review, ReviewPhoto, ReviewTag, ReviewCategoryScores, WaitTime, User, AppNotification, Bookmark,
 } from "@/lib/types";
 import type { Restaurant as RestaurantType } from "@/lib/types";
 import type { PlaceResult } from "@/lib/places/types";
+import { buildStructuredReviewFields } from "@/lib/review-scores";
 import { createNotification } from "./tier1";
 
 /** Tier B/C tables — app works without these until you run the matching migrations. */
@@ -211,6 +212,11 @@ export async function createReview(
     cuisine?: RestaurantType["cuisine"];
     priceLevel?: RestaurantType["priceLevel"];
     rating: number;
+    categoryScores: ReviewCategoryScores;
+    ratingManualOverride?: boolean;
+    waitTime?: WaitTime | null;
+    wouldReturn?: boolean | null;
+    wouldRecommend?: boolean | null;
     text: string;
     visitDate: string;
     tags: ReviewTag[];
@@ -253,16 +259,32 @@ export async function createReview(
     restaurant = mapRestaurant(row);
   }
 
+  const structured = buildStructuredReviewFields({
+    rating: data.rating,
+    categoryScores: data.categoryScores,
+    ratingManualOverride: data.ratingManualOverride,
+    waitTime: data.waitTime,
+    wouldReturn: data.wouldReturn,
+    wouldRecommend: data.wouldRecommend,
+  });
+
   const { data: review, error: reviewError } = await supabase
     .from("reviews")
     .insert({
       user_id: userId,
       restaurant_id: restaurant.id,
-      rating: data.rating,
+      rating: structured.rating,
+      food_quality: structured.categoryScores.foodQuality,
+      service_score: structured.categoryScores.service,
+      atmosphere: structured.categoryScores.atmosphere,
+      value_score: structured.categoryScores.value,
+      rating_manual_override: structured.ratingManualOverride,
+      wait_time: structured.waitTime,
+      would_return: structured.wouldReturn,
+      would_recommend: structured.wouldRecommend,
       text: data.text,
       visit_date: data.visitDate,
       tags: data.tags,
-      price_level: data.priceLevel ?? restaurant.priceLevel,
     })
     .select()
     .single();
@@ -329,15 +351,42 @@ export async function createReview(
 export async function updateReviewDb(
   userId: string,
   reviewId: string,
-  data: { rating: number; text: string; visitDate: string; tags: ReviewTag[] },
+  data: {
+    rating: number;
+    categoryScores: ReviewCategoryScores;
+    ratingManualOverride?: boolean;
+    waitTime?: WaitTime | null;
+    wouldReturn?: boolean | null;
+    wouldRecommend?: boolean | null;
+    text: string;
+    visitDate: string;
+    tags: ReviewTag[];
+  },
 ) {
   const supabase = getSupabase();
   if (!supabase) throw new Error("Supabase not configured");
 
+  const structured = buildStructuredReviewFields({
+    rating: data.rating,
+    categoryScores: data.categoryScores,
+    ratingManualOverride: data.ratingManualOverride,
+    waitTime: data.waitTime,
+    wouldReturn: data.wouldReturn,
+    wouldRecommend: data.wouldRecommend,
+  });
+
   const { data: row, error } = await supabase
     .from("reviews")
     .update({
-      rating: data.rating,
+      rating: structured.rating,
+      food_quality: structured.categoryScores.foodQuality,
+      service_score: structured.categoryScores.service,
+      atmosphere: structured.categoryScores.atmosphere,
+      value_score: structured.categoryScores.value,
+      rating_manual_override: structured.ratingManualOverride,
+      wait_time: structured.waitTime,
+      would_return: structured.wouldReturn,
+      would_recommend: structured.wouldRecommend,
       text: data.text,
       visit_date: data.visitDate,
       tags: data.tags,

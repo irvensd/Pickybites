@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { View, Text, ScrollView, Pressable, Alert } from "react-native";
 import { router } from "expo-router";
+import { goBackOr } from "@/lib/navigation";
 import { useAppStore } from "@/store/useAppStore";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
@@ -33,7 +34,7 @@ export default function AddDishScreen() {
     const result = await addDish(reviewId, { name, rating, notes, isBestDish });
     setLoading(false);
     if ("error" in result) Alert.alert("Could not add dish", result.error);
-    else router.back();
+    else goBackOr("/(tabs)/add");
   };
 
   if (myReviews.length === 0) {
@@ -42,6 +43,7 @@ export default function AddDishScreen() {
         <Text className={`text-lg font-semibold text-center ${ui.text.primary}`}>No reviews yet</Text>
         <Text className={`text-sm text-center ${ui.text.muted}`}>Write a restaurant review first, then log dishes quickly.</Text>
         <Button label="Write a Review" onPress={() => router.replace("/add-review")} />
+        <Button label="Not now" variant="ghost" onPress={() => goBackOr("/(tabs)/add")} />
       </View>
     );
   }

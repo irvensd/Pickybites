@@ -36,7 +36,7 @@ export const BUDGET_OPTIONS: { label: string; value: PriceLevel }[] = [
   { label: "$$$$", value: 4 },
 ];
 
-const key = (userId: string) => `@forkloop/taste_prefs/${userId}`;
+const key = (userId: string) => `@pickybites/taste_prefs/${userId}`;
 
 export async function loadTastePreferences(userId: string): Promise<TastePreferences | null> {
   const raw = await AsyncStorage.getItem(key(userId));

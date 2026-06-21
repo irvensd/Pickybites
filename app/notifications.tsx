@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { View, Text, ScrollView, Pressable } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -15,11 +15,16 @@ const iconForType = {
 };
 
 export default function NotificationsScreen() {
-  const { notifications, markNotificationsRead, getUser, getReview } = useAppStore();
+  const notifications = useAppStore((s) => s.notifications);
+  const getUser = useAppStore((s) => s.getUser);
+  const getReview = useAppStore((s) => s.getReview);
+  const markedRead = useRef(false);
 
   useEffect(() => {
-    markNotificationsRead();
-  }, [markNotificationsRead]);
+    if (markedRead.current) return;
+    markedRead.current = true;
+    void useAppStore.getState().markNotificationsRead();
+  }, []);
 
   return (
     <ScrollView className="flex-1 bg-savr-50 dark:bg-savr-950" contentContainerClassName="px-4 pb-6 gap-3">

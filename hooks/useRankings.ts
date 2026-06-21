@@ -5,10 +5,13 @@ import {
   getUserDishRankings,
   getCommunityRestaurantScore,
   getCityRankings,
+  getLeaderboardRankings,
 } from "@/lib/rankings";
+import type { RankingCategoryId } from "@/lib/ranking-categories";
+import { averageOverallRating } from "@/lib/review-scores";
 import type { Cuisine, RankingFilters } from "@/lib/types";
 
-export function useRankings(filters: RankingFilters = {}) {
+export function useRankings(filters: RankingFilters = {}, categoryId: RankingCategoryId = "all") {
   const currentUserId = useAppStore((s) => s.currentUserId);
   const reviews = useAppStore((s) => s.reviews);
   const dishes = useAppStore((s) => s.dishes);
@@ -30,13 +33,20 @@ export function useRankings(filters: RankingFilters = {}) {
     [currentUserId, reviews, dishes, restaurants, filters],
   );
 
-  const avgScore = myReviews.length
-    ? myReviews.reduce((s, r) => s + r.rating, 0) / myReviews.length
-    : 0;
+  const leaderboard = useMemo(
+    () =>
+      currentUserId
+        ? getLeaderboardRankings(currentUserId, categoryId, reviews, restaurants, dishes)
+        : [],
+    [currentUserId, categoryId, reviews, restaurants, dishes],
+  );
+
+  const avgScore = myReviews.length ? averageOverallRating(myReviews) : 0;
 
   return {
     restaurantRankings,
     dishRankings,
+    leaderboard,
     totalReviews: myReviews.length,
     averageScore: avgScore,
     totalDishes: dishRankings.length,
