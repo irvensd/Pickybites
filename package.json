@@ -5,14 +5,11 @@
   "private": true,
   "scripts": {
     "prepare": "node scripts/setup-githooks.js",
-    "prestart": "node scripts/free-port.js",
-    "prestart:clear": "node scripts/free-port.js",
-    "prestart:tunnel": "node scripts/free-port.js",
-    "start": "expo start --port 8081",
-    "start:tunnel": "expo start --tunnel --port 8081",
-    "start:clear": "expo start --port 8081 --clear",
-    "android": "expo start --android --port 8081",
-    "ios": "expo start --ios --port 8081"
+    "start": "node scripts/start-expo.js",
+    "start:tunnel": "node scripts/start-expo.js --tunnel",
+    "start:clear": "node scripts/start-expo.js --clear",
+    "android": "node scripts/start-expo.js --android",
+    "ios": "node scripts/start-expo.js --ios"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",

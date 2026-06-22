@@ -1,9 +1,28 @@
 /**
- * Frees port 8081 on Windows before starting Expo (avoids 8081/8082 mismatch).
+ * Frees the Expo dev port before start (avoids 8081/8082 mismatch with Expo Go).
  */
 const { execSync } = require("child_process");
 
 const PORT = process.env.EXPO_PORT || "8081";
+
+function killPortUnix(port) {
+  try {
+    const pids = execSync(`lsof -ti :${port}`, { encoding: "utf8" })
+      .trim()
+      .split("\n")
+      .filter(Boolean);
+    for (const pid of pids) {
+      try {
+        execSync(`kill -9 ${pid}`, { stdio: "ignore" });
+        console.log(`Freed port ${port} (stopped PID ${pid})`);
+      } catch {
+        /* already gone */
+      }
+    }
+  } catch {
+    /* port free */
+  }
+}
 
 function killPortWindows(port) {
   try {
@@ -27,4 +46,8 @@ function killPortWindows(port) {
   }
 }
 
-killPortWindows(PORT);
+if (process.platform === "win32") {
+  killPortWindows(PORT);
+} else {
+  killPortUnix(PORT);
+}
