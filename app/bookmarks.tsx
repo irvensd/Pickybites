@@ -158,9 +158,9 @@ export default function BookmarksScreen() {
       <ScrollView className={`flex-1 ${ui.screen}`} contentContainerClassName="px-4 pb-6 flex-1">
         <EmptyState
           icon="bookmark-outline"
-          title="Start your bucket list"
-          description="Save spots you want to try, plan visits, and collect completed experiences — not just bookmarks."
-          actionLabel="Discover Spots"
+          title="Your Bites collection is empty."
+          description="Save restaurants and dishes you want to remember."
+          actionLabel="Explore Discover"
           onAction={() => router.push("/(tabs)/discover")}
         />
       </ScrollView>

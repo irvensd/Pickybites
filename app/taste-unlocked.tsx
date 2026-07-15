@@ -74,7 +74,7 @@ export default function TasteUnlockedScreen() {
         <FadeInView delay={220} className="w-full gap-3">
           <Button
             label="Explore Your Profile"
-            onPress={() => router.replace("/(tabs)")}
+            onPress={() => router.replace("/(tabs)/profile")}
           />
           {restaurantId && (
             <Button

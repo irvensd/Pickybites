@@ -76,7 +76,7 @@ export default function TasteQuizScreen() {
     }
     setLoading(false);
     hapticSuccess();
-    router.replace("/(tabs)");
+    router.replace("/(tabs)/discover");
   };
 
   const next = () => {

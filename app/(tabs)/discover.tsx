@@ -1,7 +1,8 @@
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { useScrollToTop } from "@react-navigation/native";
 import { useAppStore } from "@/store/useAppStore";
 import { getRecommendations } from "@/lib/recommendations";
 import { getDishDiscoveries } from "@/lib/dish-discovery";
@@ -41,6 +42,8 @@ function avgRating(reviews: { rating: number }[]) {
 
 export default function DiscoverScreen() {
   const colors = useThemedColors();
+  const scrollRef = useRef<ScrollView>(null);
+  useScrollToTop(scrollRef);
   const {
     currentUserId, users, reviews, restaurants, dishes, follows,
     refreshFeed, isRefreshing, ensureRestaurantFromPlace,
@@ -339,6 +342,7 @@ export default function DiscoverScreen() {
       />
 
       <ScrollView
+        ref={scrollRef}
         stickyHeaderIndices={[0]}
         showsVerticalScrollIndicator={false}
         contentContainerClassName="pb-28"

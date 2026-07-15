@@ -20,7 +20,7 @@ export default function Login() {
   const goHome = (userId: string) => {
     const user = users.find((u) => u.id === userId);
     if (user && !user.hasCompletedTasteQuiz) router.replace("/taste-quiz");
-    else router.replace("/(tabs)");
+    else router.replace("/(tabs)/discover");
   };
 
   const handleLogin = async () => {
@@ -33,7 +33,7 @@ export default function Login() {
       hapticSuccess();
       const uid = useAppStore.getState().currentUserId;
       if (uid) goHome(uid);
-      else router.replace("/(tabs)");
+      else router.replace("/(tabs)/discover");
     }
   };
 
@@ -47,7 +47,7 @@ export default function Login() {
       hapticSuccess();
       const uid = useAppStore.getState().currentUserId;
       if (uid) goHome(uid);
-      else router.replace("/(tabs)");
+      else router.replace("/(tabs)/discover");
     }
   };
 

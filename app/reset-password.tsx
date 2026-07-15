@@ -26,7 +26,7 @@ export default function ResetPasswordScreen() {
     if (!result.ok) setError(result.error);
     else {
       hapticSuccess();
-      router.replace("/(tabs)");
+      router.replace("/(tabs)/discover");
     }
   };
 

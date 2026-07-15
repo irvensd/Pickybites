@@ -199,7 +199,7 @@ export default function AddReviewScreen() {
 
   const next = () => setStep((s) => Math.min(STEPS.length, s + 1));
   const back = () => setStep((s) => Math.max(1, s - 1));
-  const exitReview = () => goBackOr("/(tabs)");
+  const exitReview = () => goBackOr("/(tabs)/discover");
 
   if (isEditMode) {
     return (

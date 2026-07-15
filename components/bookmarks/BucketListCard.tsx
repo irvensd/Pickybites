@@ -24,6 +24,8 @@ export function BucketListCard({
   onPress,
   onMarkPlanned,
   onMarkVisited,
+  onMoveToWantToTry,
+  onLeaveReview,
   onRemove,
 }: {
   bookmark: Bookmark;
@@ -31,6 +33,8 @@ export function BucketListCard({
   onPress: () => void;
   onMarkPlanned?: () => void;
   onMarkVisited?: () => void;
+  onMoveToWantToTry?: () => void;
+  onLeaveReview?: () => void;
   onRemove?: () => void;
 }) {
   const distance = formatBookmarkDistance(bookmark, coords);
@@ -102,6 +106,29 @@ export function BucketListCard({
               >
                 <Ionicons name="checkmark-circle-outline" size={16} color="#fff" />
                 <Text className="text-xs font-semibold text-white">Mark Visited</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
+
+        {bookmark.status === "visited" && (onLeaveReview || onMoveToWantToTry) ? (
+          <View className={`flex-row gap-2 px-3 pb-3 pt-1 border-t ${ui.border.divider}`}>
+            {onLeaveReview ? (
+              <Pressable
+                onPress={(e) => { e.stopPropagation?.(); onLeaveReview(); }}
+                className="flex-1 flex-row items-center justify-center gap-1 py-2 rounded-xl bg-savr-500 dark:bg-savr-600"
+              >
+                <Ionicons name="create-outline" size={16} color="#fff" />
+                <Text className="text-xs font-semibold text-white">Leave Review</Text>
+              </Pressable>
+            ) : null}
+            {onMoveToWantToTry ? (
+              <Pressable
+                onPress={(e) => { e.stopPropagation?.(); onMoveToWantToTry(); }}
+                className={`flex-1 flex-row items-center justify-center gap-1 py-2 rounded-xl ${ui.surface.muted}`}
+              >
+                <Ionicons name="arrow-undo-outline" size={16} color="#A85D3F" />
+                <Text className={`text-xs font-semibold ${ui.text.secondary}`}>Want To Try</Text>
               </Pressable>
             ) : null}
           </View>

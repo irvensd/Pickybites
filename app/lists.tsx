@@ -73,15 +73,15 @@ export default function ListsScreen() {
         )}
 
         <Pressable
-          onPress={() => router.push("/bookmarks")}
+          onPress={() => router.push("/(tabs)/bites")}
           className={`flex-row items-center gap-3 rounded-2xl p-4 ${ui.surface.card}`}
         >
           <View className={`w-11 h-11 rounded-2xl items-center justify-center ${ui.surface.muted}`}>
             <Ionicons name="bookmark" size={22} color={isDark ? iconColors.brandDark : iconColors.brand} />
           </View>
           <View className="flex-1">
-            <Text className={`font-semibold ${ui.text.primary}`}>Food Bucket List</Text>
-            <Text className={`text-sm ${ui.text.muted}`}>Save, plan, and complete spots</Text>
+            <Text className={`font-semibold ${ui.text.primary}`}>Bites</Text>
+            <Text className={`text-sm ${ui.text.muted}`}>Want To Try, Favorites, and Lists</Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color={isDark ? iconColors.mutedDark : iconColors.muted} />
         </Pressable>

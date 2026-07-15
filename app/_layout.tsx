@@ -63,16 +63,16 @@ export default function RootLayout() {
           <Stack.Screen name="signup" />
           <Stack.Screen name="forgot-password" options={{ headerShown: true, title: "Forgot Password", headerLeft: (p) => <StackBackButton {...p} fallback="/login" /> }} />
           <Stack.Screen name="reset-password" options={{ headerShown: true, title: "Reset Password", headerLeft: (p) => <StackBackButton {...p} fallback="/login" /> }} />
-          <Stack.Screen name="taste-quiz" options={{ headerShown: true, title: "Taste Quiz", gestureEnabled: false, headerLeft: (p) => <StackBackButton {...p} fallback="/(tabs)" /> }} />
+          <Stack.Screen name="taste-quiz" options={{ headerShown: true, title: "Taste Quiz", gestureEnabled: false, headerLeft: (p) => <StackBackButton {...p} fallback="/(tabs)/discover" /> }} />
           <Stack.Screen name="notifications" options={{ headerShown: true, title: "Notifications" }} />
-          <Stack.Screen name="bookmarks" options={{ headerShown: true, title: "Food Bucket List" }} />
+          <Stack.Screen name="bookmarks" options={{ headerShown: true, title: "Bites" }} />
           <Stack.Screen name="(tabs)" options={{ title: APP_NAME }} />
           <Stack.Screen name="restaurant/[id]" options={{ headerShown: true, title: "Restaurant" }} />
           <Stack.Screen name="dish/[id]" options={{ headerShown: true, title: "Dish" }} />
           <Stack.Screen name="user/[id]" options={{ headerShown: true, title: "Profile" }} />
           <Stack.Screen name="compare/[id]" options={{ headerShown: true, title: "Compare Rankings" }} />
-          <Stack.Screen name="add-review" options={{ headerShown: true, title: "Add Review", presentation: "modal", headerLeft: (p) => <StackBackButton {...p} fallback="/(tabs)" /> }} />
-          <Stack.Screen name="add-dish" options={{ headerShown: true, title: "Add Dish", presentation: "modal", headerLeft: (p) => <StackBackButton {...p} fallback="/(tabs)/add" /> }} />
+          <Stack.Screen name="add-review" options={{ headerShown: true, title: "Add Review", presentation: "modal", headerLeft: (p) => <StackBackButton {...p} fallback="/(tabs)/discover" /> }} />
+          <Stack.Screen name="add-dish" options={{ headerShown: true, title: "Add Dish", presentation: "modal", headerLeft: (p) => <StackBackButton {...p} fallback="/(tabs)/discover" /> }} />
           <Stack.Screen name="lists" options={{ headerShown: true, title: "My Lists" }} />
           <Stack.Screen name="create-list" options={{ headerShown: true, title: "New List", presentation: "modal", headerLeft: (p) => <StackBackButton {...p} fallback="/lists" /> }} />
           <Stack.Screen name="list/[id]" options={{ headerShown: true, title: "List" }} />

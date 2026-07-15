@@ -3,19 +3,7 @@ import { View, ActivityIndicator } from "react-native";
 import { useRouter, usePathname } from "expo-router";
 import { brandColors } from "@/constants/branding";
 import { useAppStore } from "@/store/useAppStore";
-
-type EntryRoute = "/onboarding" | "/login" | "/taste-quiz" | "/(tabs)";
-
-function resolveEntryRoute(
-  hasSeenOnboarding: boolean,
-  isAuthenticated: boolean,
-  hasCompletedTasteQuiz: boolean,
-): EntryRoute {
-  if (!hasSeenOnboarding) return "/onboarding";
-  if (!isAuthenticated) return "/login";
-  if (!hasCompletedTasteQuiz) return "/taste-quiz";
-  return "/(tabs)";
-}
+import { resolveEntryRoute, type EntryRoute } from "@/lib/navigation";
 
 export default function Index() {
   const router = useRouter();

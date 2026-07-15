@@ -79,7 +79,7 @@ export default function HomeScreen() {
           return;
         }
       }
-      router.push("/bookmarks");
+      router.push("/(tabs)/bites");
     },
     [restaurants],
   );

@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { View, Text, ScrollView, Pressable } from "react-native";
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useScrollToTop } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppStore } from "@/store/useAppStore";
 import { calculateTasteDNA } from "@/lib/taste-dna";
@@ -19,15 +20,16 @@ import { cn } from "@/lib/utils";
 const menu = [
   { href: "/taste-dna" as const, icon: "color-wand" as const, label: "Taste DNA", desc: "Your flavor profile" },
   { href: "/rankings" as const, icon: "trophy" as const, label: "Rankings", desc: "Your top spots & dishes" },
-  { href: "/bookmarks" as const, icon: "bookmark" as const, label: "Food Bucket List", desc: "Save, plan, and complete spots" },
+  { href: "/journal" as const, icon: "book" as const, label: "Food Journal", desc: "Timeline of visits" },
   { href: "/lists" as const, icon: "list" as const, label: "Lists", desc: "Curated restaurant lists" },
-  { href: "/(tabs)/journal" as const, icon: "book" as const, label: "Food Journal", desc: "Timeline of visits" },
   { href: "/wrapped" as const, icon: "gift" as const, label: "Food Wrapped", desc: "Swipeable year, month & all-time recap" },
   { href: "/settings" as const, icon: "settings" as const, label: "Settings", desc: "Account & preferences" },
 ];
 
 export default function ProfileScreen() {
   const isDark = useThemeStore((s) => s.resolved) === "dark";
+  const scrollRef = useRef<ScrollView>(null);
+  useScrollToTop(scrollRef);
   const { currentUserId, users, reviews, dishes, restaurants } = useAppStore();
   const [section, setSection] = useState<"me" | "friends">("me");
   const user = users.find((u) => u.id === currentUserId);
@@ -51,7 +53,11 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView className={`flex-1 ${ui.screen}`} edges={["top"]}>
-      <ScrollView contentContainerClassName="pb-28 gap-5" showsVerticalScrollIndicator={false}>
+      <ScrollView
+        ref={scrollRef}
+        contentContainerClassName="pb-28 gap-5"
+        showsVerticalScrollIndicator={false}
+      >
         <View className="px-4 pt-2 gap-3">
           <Text className={`text-sm ${ui.text.muted}`}>Who am I as a food user?</Text>
           <Text className={`text-2xl font-bold ${ui.text.primary}`}>Profile</Text>

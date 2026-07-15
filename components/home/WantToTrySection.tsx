@@ -28,10 +28,10 @@ export function WantToTrySection({
   if (!bookmarks.length) {
     return (
       <View className="gap-2 px-4">
-        <HomeSectionHeader title="Food Bucket List" subtitle="Collect experiences, not bookmarks" icon="bookmark" />
+        <HomeSectionHeader title="Bites" subtitle="Collect experiences you want to remember" icon="bookmark" />
         <Pressable onPress={() => router.push("/(tabs)/discover")}>
           <Text className={`text-sm leading-5 ${ui.text.secondary}`}>
-            Save restaurants from Discover to start your personal food bucket list.
+            Save restaurants from Discover to start your Bites collection.
           </Text>
         </Pressable>
       </View>
@@ -44,8 +44,8 @@ export function WantToTrySection({
         <BucketListProgress stats={stats} />
       </View>
       <View className="px-4 flex-row items-end justify-between">
-        <HomeSectionHeader title="Food Bucket List" subtitle="Recently saved" icon="bookmark" />
-        <Pressable onPress={() => router.push("/bookmarks")} hitSlop={8}>
+        <HomeSectionHeader title="Bites" subtitle="Recently saved" icon="bookmark" />
+        <Pressable onPress={() => router.push("/(tabs)/bites")} hitSlop={8}>
           <Text className="text-sm font-semibold text-savr-600 dark:text-savr-400">See all</Text>
         </Pressable>
       </View>
